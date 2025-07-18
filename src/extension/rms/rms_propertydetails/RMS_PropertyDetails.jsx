@@ -148,13 +148,15 @@ let extension = {
         if (['添加行'].includes(button.name)) {
           button.onClick = async () => {
             //const rows = this.getTable("RMS_OwnerDetails").rowData;
+            console.log(this.editFormFields.Company);
+            
             const _row = {
               OwnerName: this.editFormFields.TenantName,
               RentalStartTime: this.editFormFields.RentalStartTime,
               RentalEndTime: this.editFormFields.RentalEndTime,
               MonthlyRent: this.editFormFields.MonthlyRent,
               MonthlyManageFee: this.editFormFields.MonthlyManageFee,
-              Company:this.editFormFields.Company[0],
+              Company:this.editFormFields.Company[this.editFormFields.Company.length-1],
               ContractNumber:this.editFormFields.ContractNumber,
               TenantId:this.editFormFields.TenantId,
             };
@@ -167,25 +169,33 @@ let extension = {
       this.subDetails[0].buttons.forEach(button => {
         if (['添加行'].includes(button.name)) {
           button.onClick = async () => {
-          //  const rows = this.getTable("RMS_PaymentDetails").rowData;
             const OwnerRow = this.getTable("RMS_OwnerDetails").getSelected();
-            let rows = this.getCurrentDetailSelectRows('RMS_OwnerDetails');
-            if(!rows){
-              this.$Message.warning('请先选择业主!');
-              return;
-            }
             let _row = {
               OwnerName: OwnerRow[0].OwnerName,
               Company:OwnerRow[0].Company,
             };
-            this.getTable("RMS_PaymentDetails").addRow(_row);
-            _row=[_row]
-             //给二级明细添加表数据
-            if (!rows[0]["RMS_PaymentDetails"]) {
-              rows[0]["RMS_PaymentDetails"] = _row;
-            } else {
-              rows[0]["RMS_PaymentDetails"].push(..._row);
-            }
+            this.addSubRow("RMS_PaymentDetails",this.details[0].detail,button,_row);
+          //  const rows = this.getTable("RMS_PaymentDetails").rowData;
+            // const OwnerRow = this.getTable("RMS_OwnerDetails").getSelected();
+            // let rows = this.getCurrentDetailSelectRows('RMS_OwnerDetails');
+            // if(!rows){
+            //   this.$Message.warning('请先选择业主!');
+            //   return;
+            // }
+            // let _row = {
+            //   OwnerName: OwnerRow[0].OwnerName,
+            //   Company:OwnerRow[0].Company,
+            // };
+            // this.getTable("RMS_PaymentDetails").addRow(_row);
+            // _row=[_row]
+            //  //给二级明细添加表数据
+            // if (!rows[0]["RMS_PaymentDetails"]) {
+            //   rows[0]["RMS_PaymentDetails"] = _row;
+            // } else {
+            //   rows[0]["RMS_PaymentDetails"].push(..._row);
+            // }
+            // //三级明细表数据指向二级明细表行数据
+            // this.getTableRef("RMS_PaymentDetails").rowData = rows[0]["RMS_PaymentDetails"];
           }
         }
       })

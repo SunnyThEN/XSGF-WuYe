@@ -65,7 +65,32 @@ let extension = {
       return true;
     },
     searchAfter(result) {
-      //查询后，result返回的查询数据,可以在显示到表格前处理表格的值
+      // 对结果进行排序，将符合条件的行靠前排
+      if (result) {
+        const now = new Date().getTime();
+        result.sort((a, b) => {
+          const aStartDate = new Date(a.PaymentStartDate).getTime();
+          const bStartDate = new Date(b.PaymentStartDate).getTime();
+          
+          // 检查a行是否符合条件
+          const aCondition1 = a.ActualAmount == null && aStartDate < now;
+          const aCondition2 = a.ActualAmount < a.DueAmount && aStartDate < now;
+          const aPriority = aCondition1 || aCondition2;
+          
+          // 检查b行是否符合条件
+          const bCondition1 = b.ActualAmount == null && bStartDate < now;
+          const bCondition2 = b.ActualAmount < b.DueAmount && bStartDate < now;
+          const bPriority = bCondition1 || bCondition2;
+          
+          // 符合条件的行排在前面
+          if (aPriority && !bPriority) return -1;
+          if (!aPriority && bPriority) return 1;
+          
+          // 如果都符合或都不符合条件，按原顺序排列
+          return 0;
+        });
+      }
+      
       return true;
     },
     addBefore(formData) {

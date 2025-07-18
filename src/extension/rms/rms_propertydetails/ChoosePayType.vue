@@ -73,7 +73,6 @@ export default {
             
             // 按指定间隔拆分时间段
             let currentDate = new Date(startDate);
-            let paymentRows = []; // 存储拆分后的付款记录
             
             while(currentDate < endDate) {
                 let periodEnd = new Date(currentDate);
@@ -104,20 +103,11 @@ export default {
                     DueAmount: ((OwnerData.MonthlyTotalFee || 0) * interval).toFixed(2).replace(/\.00$/, '')// 根据付款间隔计算应收金额
                 };
                 
-                // 添加到表格中
-                _this.getTable("RMS_PaymentDetails").addRow(_row);
-                paymentRows.push(_row);
+                _this.addSubRow("RMS_PaymentDetails",_this.details[0].detail,'button',_row);
                 
                 currentDate = periodEnd; // 直接使用periodEnd作为下一个周期的开始日期
             }
-            
-            // 给二级明细添加表数据，参照添加行方法的逻辑
-            if (!rows[0]["RMS_PaymentDetails"]) {
-                rows[0]["RMS_PaymentDetails"] = paymentRows;
-            } else {
-                rows[0]["RMS_PaymentDetails"].push(...paymentRows);
-            }
-            
+
             this.model = false;
         },
         closeModel() {

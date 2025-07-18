@@ -5,42 +5,55 @@
         <!-- 数据概览卡片 -->
         <div class="data-overview">
           <el-row :gutter="20">
-            <el-col :span="8">
-              <el-card shadow="hover">
-                <template #header>
-                  <div class="card-header">
-                    <span>总商户数</span>
+            <el-col :span="6">
+              <el-card shadow="hover" class="stat-card">
+                <div class="stat-content">
+                  <div class="stat-icon">
+                    <i class="el-icon-office-building"></i>
                   </div>
-                </template>
-                <div class="card-number">{{ propertyData ? propertyData.length : 0 }}</div>
-                <div class="card-footer">
-                  <span>当前在租商铺数</span>
+                  <div class="stat-info">
+                    <div class="stat-number">{{ currentTenants }}</div>
+                    <div class="stat-label">当前租户数</div>
+                  </div>
                 </div>
               </el-card>
             </el-col>
-            <el-col :span="8">
-              <el-card shadow="hover">
-                <template #header>
-                  <div class="card-header">
-                    <span>本月租金收入</span>
+            <el-col :span="6">
+              <el-card shadow="hover" class="stat-card">
+                <div class="stat-content">
+                  <div class="stat-icon income">
+                    <i class="el-icon-money"></i>
                   </div>
-                </template>
-                <div class="card-number">{{ currentMonthRent || 0 }}元</div>
-                <div class="card-footer">
-                  <span>租金总收入</span>
+                  <div class="stat-info">
+                    <div class="stat-number">{{ currentMonthIncome }}元</div>
+                    <div class="stat-label">本月收入</div>
+                  </div>
                 </div>
               </el-card>
             </el-col>
-            <el-col :span="8">
-              <el-card shadow="hover">
-                <template #header>
-                  <div class="card-header">
-                    <span>本月物业费</span>
+            <el-col :span="6">
+              <el-card shadow="hover" class="stat-card">
+                <div class="stat-content">
+                  <div class="stat-icon overdue">
+                    <i class="el-icon-warning"></i>
                   </div>
-                </template>
-                <div class="card-number">{{ currentMonthManageFee || 0 }}元</div>
-                <div class="card-footer">
-                  <span>物业费总收入</span>
+                  <div class="stat-info">
+                    <div class="stat-number">{{ overdueAmount }}元</div>
+                    <div class="stat-label">逾期金额</div>
+                  </div>
+                </div>
+              </el-card>
+            </el-col>
+            <el-col :span="6">
+              <el-card shadow="hover" class="stat-card">
+                <div class="stat-content">
+                  <div class="stat-icon growth">
+                    <i class="el-icon-trend-charts"></i>
+                  </div>
+                  <div class="stat-info">
+                    <div class="stat-number">{{ yearOverYearGrowth }}%</div>
+                    <div class="stat-label">同比增长</div>
+                  </div>
                 </div>
               </el-card>
             </el-col>
@@ -54,51 +67,125 @@
               <el-card class="chart-card">
                 <template #header>
                   <div class="card-header">
-                    <span>近12个月收入统计</span>
+                    <span>近12个月收入趋势</span>
+                    <div class="chart-controls">
+                      <el-cascader
+                        v-model="selectedCompany"
+                        :options="companyCascaderOptions"
+                        placeholder="选择公司"
+                        style="width: 250px; margin-right: 16px;"
+                        @change="updateIncomeChart"
+                        clearable
+                        :props="{
+                          value: 'value',
+                          label: 'label',
+                          children: 'children',
+                          checkStrictly: true,
+                          multiple: false
+                        }"
+                      />
+                      <div class="chart-legend">
+                        <span class="legend-item">
+                          <span class="legend-color current"></span>
+                          <span>今年</span>
+                        </span>
+                        <span class="legend-item">
+                          <span class="legend-color last-year"></span>
+                          <span>去年</span>
+                        </span>
+                      </div>
+                    </div>
                   </div>
                 </template>
-                <div ref="incomeChart" style="height: 300px"></div>
+                <div ref="incomeChart" style="height: 350px"></div>
               </el-card>
             </el-col>
             <el-col :span="8">
               <el-card class="chart-card">
                 <template #header>
                   <div class="card-header">
-                    <span>本月收入构成</span>
+                    <span>收入构成分析</span>
                   </div>
                 </template>
-                <div ref="pieChart" style="height: 300px"></div>
+                <div ref="pieChart" style="height: 350px"></div>
               </el-card>
             </el-col>
           </el-row>
         </div>
-
+        <!-- 逾期付款提醒 -->
+        <el-card class="overdue-reminder">
+          <template #header>
+            <div class="card-header">
+              <span>逾期付款提醒</span>
+              <el-button type="text" size="small">查看全部</el-button>
+            </div>
+          </template>
+          <el-table :data="overduePayments" style="width: 100%" :max-height="300">
+            <el-table-column prop="ownerName" label="商户名称" />
+            <el-table-column prop="paymentStartDate" label="付款期间" >
+              <template #default="scope">
+                {{ scope.row.paymentStartDate }} ~ {{ scope.row.paymentEndDate }}
+              </template>
+            </el-table-column>
+            <el-table-column prop="dueAmount" label="应收金额" >
+              <template #default="scope">
+                {{ scope.row.dueAmount }}元
+              </template>
+            </el-table-column>
+            <el-table-column prop="actualAmount" label="实收金额" >
+              <template #default="scope">
+                {{ scope.row.actualAmount || 0 }}元
+              </template>
+            </el-table-column>
+            <el-table-column prop="overdueDays" label="逾期天数">
+              <template #default="scope">
+                <el-tag :type="getOverdueType(scope.row.overdueDays)" size="small">
+                  {{ scope.row.overdueDays }}天
+                </el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column prop="overdueAmount" label="逾期金额">
+              <template #default="scope">
+                <span class="overdue-amount">{{ scope.row.overdueAmount }}元</span>
+              </template>
+            </el-table-column>
+          </el-table>
+        </el-card>
         <!-- 租期到期提醒 -->
         <el-card class="lease-reminder">
           <template #header>
             <div class="card-header">
               <span>租期到期提醒</span>
-              <el-button type="text">查看全部</el-button>
+              <el-button type="text" size="small">查看全部</el-button>
             </div>
           </template>
-          <el-table :data="expiringLeases" style="width: 100%">
-            <el-table-column prop="tenant" label="商户" width="120" />
-            <el-table-column prop="room" label="房间号" width="180" />
-            <el-table-column prop="expireDate" label="到期日期" width="120" />
-            <el-table-column prop="remainDays" label="剩余天数" width="100">
+          <el-table :data="expiringLeases" style="width: 100%" :max-height="300">
+            <el-table-column prop="tenant" label="商户名称" />
+            <el-table-column prop="room" label="房间号" />
+            <el-table-column prop="expireDate" label="到期日期"  />
+            <el-table-column prop="remainDays" label="剩余天数" >
               <template #default="scope">
-                {{ scope.row.remainDays }}天
+                <el-tag :type="getRemainDaysType(scope.row.remainDays)" size="small">
+                  {{ scope.row.remainDays }}天
+                </el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column prop="monthlyRent" label="月租金" >
+              <template #default="scope">
+                {{ scope.row.monthlyRent }}元
               </template>
             </el-table-column>
             <el-table-column prop="status" label="状态">
               <template #default="scope">
-                <el-tag :type="getStatusType(scope.row.status)">
+                <el-tag :type="getStatusType(scope.row.status)" size="small">
                   {{ scope.row.status }}
                 </el-tag>
               </template>
             </el-table-column>
           </el-table>
         </el-card>
+
+      
       </div>
     </el-scrollbar>
   </div>
@@ -113,117 +200,329 @@ export default defineComponent({
     return {
       incomeChart: null,
       pieChart: null,
-      propertyData: null,
-      currentMonthRent: 0,
-      currentMonthManageFee: 0,
-      expiringLeases: [
-        {
-          tenant: '张三',
-          room: 'A-101',
-          expireDate: '2024-04-30',
-          remainDays: 15,
-          status: '待续约'
-        },
-        {
-          tenant: '李四',
-          room: 'B-203',
-          expireDate: '2024-05-05',
-          remainDays: 20,
-          status: '已续约'
-        }
-      ]
+      ownerData: null, // 商户数据
+      paymentData: null, // 付款数据
+      companyData: null, // 公司数据
+      currentTenants: 0,
+      currentMonthIncome: 0,
+      overdueAmount: 0,
+      yearOverYearGrowth: 0,
+      expiringLeases: [],
+      overduePayments: [],
+      selectedCompany: 'all', // 选中的公司，默认为所有公司
+      companyOptions: [], // 公司选项列表
+      companyCascaderOptions: [] // 级联选择器选项
     }
   },
   methods: {
-    async fetchPropertyData() {
+    // 获取商户数据
+    async fetchOwnerData() {
       try {
-        const response = await this.http.post('api/rms_propertydetails/getPageData', {}, true);
-        this.propertyData = response.rows;
-        console.log('物业数据:', this.propertyData);
-        
-        // 更新到期提醒列表
+        const response = await this.http.post('api/RMS_OwnerDetails/getPageData', {rows:100000}, true);
+        this.ownerData = response.rows;
+        this.calculateCurrentTenants();
         this.updateExpiringLeases();
       } catch (error) {
-        console.error('获取物业数据失败:', error);
+        // 获取商户数据失败
       }
     },
-    
-    // 更新到期提醒列表
-    updateExpiringLeases() {
-      if (!this.propertyData) return;
+
+    // 获取付款数据
+    async fetchPaymentData() {
+      try {
+        const response = await this.http.post('api/RMS_PaymentDetails/getPageData', {rows:100000}, true);
+        this.paymentData = response.rows;
+        this.calculateIncomeData();
+        this.updateOverduePayments();
+      } catch (error) {
+        // 获取付款数据失败
+      }
+    },
+
+    // 获取公司数据
+    async fetchCompanyData() {
+      try {
+        const response = await this.http.post('api/Sys_Dictionary/GetVueDictionary', ["Company"], true);
+        this.companyData = response;
+        this.generateCompanyOptions();
+      } catch (error) {
+        // 获取公司数据失败
+      }
+    },
+
+    // 计算当前租户数量
+    calculateCurrentTenants() {
+      if (!this.ownerData) return;
       
       const now = new Date();
-      this.expiringLeases = this.propertyData
-        .filter(item => item.RentalEndTime) // 确保有结束时间
+      let filteredData = this.ownerData.filter(item => {
+        if (!item.RentalStartTime || !item.RentalEndTime) return false;
+        const startDate = new Date(item.RentalStartTime);
+        const endDate = new Date(item.RentalEndTime);
+        return now >= startDate && now <= endDate;
+      });
+
+      // 如果选择了特定公司，则过滤数据
+      if (this.selectedCompany && this.selectedCompany !== 'all') {
+        const targetCompanyIds = this.getCompanyAndChildrenIds(this.selectedCompany);
+        filteredData = filteredData.filter(item => targetCompanyIds.includes(item.Company));
+      }
+
+      this.currentTenants = filteredData.length;
+    },
+
+    // 计算收入数据
+    calculateIncomeData() {
+      if (!this.paymentData) return;
+
+      const now = new Date();
+      const currentYear = now.getFullYear();
+      const currentMonth = now.getMonth();
+
+      // 获取需要统计的公司ID列表
+      let targetCompanyIds = null;
+      if (this.selectedCompany && this.selectedCompany !== 'all') {
+        targetCompanyIds = this.getCompanyAndChildrenIds(this.selectedCompany);
+      }
+
+      // 计算本月收入
+      this.currentMonthIncome = this.paymentData
+        .filter(item => {
+          if (!item.PaymentDate) return false;
+          const paymentDate = new Date(item.PaymentDate);
+          const isCurrentMonth = paymentDate.getFullYear() === currentYear && 
+                                paymentDate.getMonth() === currentMonth &&
+                                item.ActualAmount;
+          
+          // 如果选择了特定公司，则过滤数据
+          if (targetCompanyIds && !targetCompanyIds.includes(item.Company)) {
+            return false;
+          }
+          
+          return isCurrentMonth;
+        })
+        .reduce((sum, item) => sum + (Number(item.ActualAmount) || 0), 0);
+
+      // 计算逾期金额
+      this.overdueAmount = this.paymentData
+        .filter(item => {
+          if (!item.PaymentStartDate) return false;
+          const startDate = new Date(item.PaymentStartDate);
+          const isOverdue = startDate < now && 
+                           (item.ActualAmount == null || Number(item.ActualAmount) < Number(item.DueAmount));
+          
+          // 如果选择了特定公司，则过滤数据
+          if (targetCompanyIds && !targetCompanyIds.includes(item.Company)) {
+            return false;
+          }
+          
+          return isOverdue;
+        })
+        .reduce((sum, item) => {
+          const dueAmount = Number(item.DueAmount) || 0;
+          const actualAmount = Number(item.ActualAmount) || 0;
+          return sum + (dueAmount - actualAmount);
+        }, 0);
+
+      // 计算同比增长
+      this.calculateYearOverYearGrowth();
+    },
+
+    // 计算同比增长
+    calculateYearOverYearGrowth() {
+      if (!this.paymentData) return;
+
+      const now = new Date();
+      const currentYear = now.getFullYear();
+      const currentMonth = now.getMonth();
+      const lastYear = currentYear - 1;
+
+      // 获取需要统计的公司ID列表
+      let targetCompanyIds = null;
+      if (this.selectedCompany && this.selectedCompany !== 'all') {
+        targetCompanyIds = this.getCompanyAndChildrenIds(this.selectedCompany);
+      }
+
+      // 今年本月收入
+      const currentYearIncome = this.paymentData
+        .filter(item => {
+          if (!item.PaymentDate) return false;
+          const paymentDate = new Date(item.PaymentDate);
+          const isCurrentYearMonth = paymentDate.getFullYear() === currentYear && 
+                                    paymentDate.getMonth() === currentMonth &&
+                                    item.ActualAmount;
+          
+          // 如果选择了特定公司，则过滤数据
+          if (targetCompanyIds && !targetCompanyIds.includes(item.Company)) {
+            return false;
+          }
+          
+          return isCurrentYearMonth;
+        })
+        .reduce((sum, item) => sum + (Number(item.ActualAmount) || 0), 0);
+
+      // 去年本月收入
+      const lastYearIncome = this.paymentData
+        .filter(item => {
+          if (!item.PaymentDate) return false;
+          const paymentDate = new Date(item.PaymentDate);
+          const isLastYearMonth = paymentDate.getFullYear() === lastYear && 
+                                 paymentDate.getMonth() === currentMonth &&
+                                 item.ActualAmount;
+          
+          // 如果选择了特定公司，则过滤数据
+          if (targetCompanyIds && !targetCompanyIds.includes(item.Company)) {
+            return false;
+          }
+          
+          return isLastYearMonth;
+        })
+        .reduce((sum, item) => sum + (Number(item.ActualAmount) || 0), 0);
+
+      if (lastYearIncome > 0) {
+        this.yearOverYearGrowth = ((currentYearIncome - lastYearIncome) / lastYearIncome * 100).toFixed(1);
+      } else {
+        this.yearOverYearGrowth = currentYearIncome > 0 ? 100 : 0;
+      }
+    },
+
+    // 更新到期提醒列表
+    updateExpiringLeases() {
+      if (!this.ownerData) return;
+      
+      const now = new Date();
+      let filteredData = this.ownerData.filter(item => item.RentalEndTime);
+
+      // 如果选择了特定公司，则过滤数据
+      if (this.selectedCompany && this.selectedCompany !== 'all') {
+        const targetCompanyIds = this.getCompanyAndChildrenIds(this.selectedCompany);
+        filteredData = filteredData.filter(item => targetCompanyIds.includes(item.Company));
+      }
+
+      this.expiringLeases = filteredData
         .map(item => {
           const endDate = new Date(item.RentalEndTime);
           const remainDays = Math.ceil((endDate - now) / (1000 * 60 * 60 * 24));
           return {
-            tenant: item.TenantName || '未知商户',
-            room: `${item.Buildings}-${item.Floor}-${item.RoomNumber}`,
+            tenant: item.OwnerName || '未知商户',
+            room: `${item.Buildings || ''}-${item.Floor || ''}-${item.RoomNumber || ''}`,
             expireDate: item.RentalEndTime.split(' ')[0],
             remainDays: remainDays,
+            monthlyRent: Number(item.MonthlyRent) || 0,
             status: remainDays <= 30 ? '待续约' : (remainDays <= 60 ? '即将到期' : '正常')
           };
         })
-       // .filter(item => item.remainDays > 0 && item.remainDays <= 90) // 只显示未到期且90天内到期的
-        .sort((a, b) => a.remainDays - b.remainDays); // 按剩余天数排序
-        console.log(this.expiringLeases);
-        
+        .filter(item => item.remainDays > 0 && item.remainDays <= 90)
+        .sort((a, b) => a.remainDays - b.remainDays)
+        .slice(0, 10); // 只显示前10条
     },
-    
-    // 计算每月的租金和物业费总和
-    calculateMonthlyIncome() {
-      if (!this.propertyData) return null;
-      
-      const monthlyData = {
-        rent: new Array(12).fill(0),
-        manageFee: new Array(12).fill(0)
-      };
-      
-      this.propertyData.forEach(item => {
-        const rent = Number(item.MonthlyRent) || 0;
-        const manageFee = Number(item.MonthlyManageFee) || 0;
-        
-        // 将月租金和物业费加到对应月份
-        const startDate = new Date(item.RentalStartTime);
-        const endDate = new Date(item.RentalEndTime);
-        const currentYear = new Date().getFullYear();
-        
-        for (let month = 0; month < 12; month++) {
-          const currentMonth = new Date(currentYear, month, 1);
-          if (currentMonth >= startDate && currentMonth <= endDate) {
-            monthlyData.rent[month] += rent;
-            monthlyData.manageFee[month] += manageFee;
-          }
-        }
+
+    // 更新逾期付款列表
+    updateOverduePayments() {
+      if (!this.paymentData) return;
+
+      const now = new Date();
+      let filteredData = this.paymentData.filter(item => {
+        if (!item.PaymentStartDate) return false;
+        const startDate = new Date(item.PaymentStartDate);
+        return startDate < now && 
+               (item.ActualAmount == null || Number(item.ActualAmount) < Number(item.DueAmount));
       });
-      
-      // 更新当月收入数据
-      const currentMonth = new Date().getMonth();
-      this.currentMonthRent = monthlyData.rent[currentMonth];
-      this.currentMonthManageFee = monthlyData.manageFee[currentMonth];
-      
-      return monthlyData;
+
+      // 如果选择了特定公司，则过滤数据
+      if (this.selectedCompany && this.selectedCompany !== 'all') {
+        const targetCompanyIds = this.getCompanyAndChildrenIds(this.selectedCompany);
+        filteredData = filteredData.filter(item => targetCompanyIds.includes(item.Company));
+      }
+
+      this.overduePayments = filteredData
+        .map(item => {
+          const startDate = new Date(item.PaymentStartDate);
+          const overdueDays = Math.ceil((now - startDate) / (1000 * 60 * 60 * 24));
+          const dueAmount = Number(item.DueAmount) || 0;
+          const actualAmount = Number(item.ActualAmount) || 0;
+          
+          return {
+            ownerName: item.OwnerName || '未知商户',
+            paymentStartDate: item.PaymentStartDate.split(' ')[0],
+            paymentEndDate: item.PaymentEndDate ? item.PaymentEndDate.split(' ')[0] : '',
+            dueAmount: dueAmount,
+            actualAmount: actualAmount,
+            overdueDays: overdueDays,
+            overdueAmount: dueAmount - actualAmount
+          };
+        })
+        .sort((a, b) => b.overdueDays - a.overdueDays)
+        .slice(0, 10); // 只显示前10条
     },
-    
+
+    // 初始化图表
     initCharts() {
-      const monthlyIncome = this.calculateMonthlyIncome();
-      if (!monthlyIncome) return;
+      this.initIncomeChart();
+      this.initPieChart();
+    },
+
+    // 初始化收入趋势图
+    initIncomeChart() {
+      if (!this.paymentData) return;
+
+      const monthlyData = this.calculateMonthlyIncomeData();
+      this.updateIncomeChartOption(monthlyData);
+    },
+
+    // 更新收入图表
+    updateIncomeChart() {
+      if (!this.paymentData) return;
       
-      // 获取当前月份的收入数据用于饼图
-      const currentMonth = new Date().getMonth();
-      const currentMonthRent = monthlyIncome.rent[currentMonth];
-      const currentMonthManageFee = monthlyIncome.manageFee[currentMonth];
+      // 如果选择被清空，重置为所有公司
+      if (!this.selectedCompany) {
+        this.selectedCompany = 'all';
+      }
       
-      // 初始化收入统计图表
-      const income = echarts.init(this.$refs.incomeChart);
-      income.setOption({
+      // 处理级联选择器的值
+      let selectedCompanyId = this.selectedCompany;
+      if (Array.isArray(this.selectedCompany)) {
+        if (this.selectedCompany.length === 0) {
+          selectedCompanyId = 'all';
+        } else if (this.selectedCompany.length === 1 && this.selectedCompany[0] === 'all') {
+          selectedCompanyId = 'all';
+        } else {
+          // 取最后一个值作为选中的公司ID
+          selectedCompanyId = this.selectedCompany[this.selectedCompany.length - 1];
+        }
+      }
+      
+      // 更新选中的公司ID
+      this.selectedCompany = selectedCompanyId;
+      
+      // 更新所有相关数据
+      this.calculateCurrentTenants();
+      this.calculateIncomeData();
+      this.updateExpiringLeases();
+      this.updateOverduePayments();
+      
+      const monthlyData = this.calculateMonthlyIncomeData();
+      this.updateIncomeChartOption(monthlyData);
+    },
+
+    // 更新收入图表配置
+    updateIncomeChartOption(monthlyData) {
+      if (!this.incomeChart) {
+        this.incomeChart = echarts.init(this.$refs.incomeChart);
+      }
+
+      this.incomeChart.setOption({
         tooltip: {
-          trigger: 'axis'
+          trigger: 'axis',
+          axisPointer: {
+            type: 'cross',
+            label: {
+              backgroundColor: '#6a7985'
+            }
+          }
         },
         legend: {
-          data: ['租金收入', '物业费']
+          data: ['今年收入', '去年收入']
         },
         grid: {
           left: '3%',
@@ -238,52 +537,71 @@ export default defineComponent({
         },
         yAxis: {
           type: 'value',
-          name: '金额(元)'
+          name: '金额(元)',
+          axisLabel: {
+            formatter: '{value}'
+          }
         },
-        color: ['#6366f1', '#10b981'],
+        color: ['#6366f1', '#94a3b8'],
         series: [
           {
-            name: '租金收入',
+            name: '今年收入',
             type: 'line',
             smooth: true,
-            data: monthlyIncome.rent,
+            data: monthlyData.currentYear,
             lineStyle: {
               width: 3,
               shadowColor: 'rgba(99,102,241,0.2)',
               shadowBlur: 10
+            },
+            areaStyle: {
+              opacity: 0.1
             }
           },
           {
-            name: '物业费',
+            name: '去年收入',
             type: 'line',
             smooth: true,
-            data: monthlyIncome.manageFee,
+            data: monthlyData.lastYear,
             lineStyle: {
               width: 3,
-              shadowColor: 'rgba(16,185,129,0.2)',
+              shadowColor: 'rgba(148,163,184,0.2)',
               shadowBlur: 10
+            },
+            areaStyle: {
+              opacity: 0.1
             }
           }
         ]
       });
+    },
 
-      // 初始化收入构成饼图
+    // 初始化饼图
+    initPieChart() {
+      if (!this.paymentData) return;
+
+      const pieData = this.calculatePieChartData();
+      
       const pie = echarts.init(this.$refs.pieChart);
       pie.setOption({
         tooltip: {
           trigger: 'item',
-          formatter: '{a} <br/>{b}: {c}元 ({d}%)'
+          formatter: '{a} <br/>{b}: {c}元 ({d}%)',
+          confine: false,
+          appendToBody: true
         },
         legend: {
           orient: 'vertical',
-          left: 'left'
+          left: 'left',
+          top: 'top'
         },
-        color: ['#6366f1', '#10b981'],
+        color: ['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4'],
         series: [
           {
-            name: '本月收入构成',
+            name: '收入构成',
             type: 'pie',
-            radius: ['50%', '70%'],
+            radius: ['40%', '70%'],
+            center: ['60%', '50%'],
             avoidLabelOverlap: false,
             itemStyle: {
               borderRadius: 10,
@@ -306,35 +624,289 @@ export default defineComponent({
             labelLine: {
               show: false
             },
-            data: [
-              { value: currentMonthRent, name: '租金收入' },
-              { value: currentMonthManageFee, name: '物业费' }
-            ]
+            data: pieData
           }
         ]
       });
 
-      // 监听窗口大小变化，重绘图表
-      window.addEventListener('resize', () => {
-        income.resize();
-        pie.resize();
-      });
+      this.pieChart = pie;
     },
+
+    // 计算月度收入数据
+    calculateMonthlyIncomeData() {
+      const currentYear = new Date().getFullYear();
+      const lastYear = currentYear - 1;
+      
+      const currentYearData = new Array(12).fill(0);
+      const lastYearData = new Array(12).fill(0);
+
+      // 获取需要统计的公司ID列表
+      let targetCompanyIds = null;
+      if (this.selectedCompany && this.selectedCompany !== 'all') {
+        targetCompanyIds = this.getCompanyAndChildrenIds(this.selectedCompany);
+      }
+
+      this.paymentData.forEach(item => {
+        if (!item.PaymentDate || !item.ActualAmount) return;
+        
+        // 如果选择了特定公司，则只统计该公司的数据
+        if (targetCompanyIds && !targetCompanyIds.includes(item.Company)) {
+          return;
+        }
+        
+        const paymentDate = new Date(item.PaymentDate);
+        const year = paymentDate.getFullYear();
+        const month = paymentDate.getMonth();
+        const amount = Number(item.ActualAmount) || 0;
+
+        if (year === currentYear) {
+          currentYearData[month] += amount;
+        } else if (year === lastYear) {
+          lastYearData[month] += amount;
+        }
+      });
+
+      return {
+        currentYear: currentYearData,
+        lastYear: lastYearData
+      };
+    },
+
+    // 计算饼图数据
+    calculatePieChartData() {
+      const now = new Date();
+      const currentYear = now.getFullYear();
+      const currentMonth = now.getMonth();
+
+      // 按顶级公司统计本月收入（子公司的收入汇入上级公司）
+      const topCompanyIncome = {};
+      
+      this.paymentData.forEach(item => {
+        if (!item.PaymentDate || !item.ActualAmount) return;
+        
+        const paymentDate = new Date(item.PaymentDate);
+        if (paymentDate.getFullYear() === currentYear && 
+            paymentDate.getMonth() === currentMonth) {
+          
+          const companyId = item.Company;
+          const amount = Number(item.ActualAmount) || 0;
+          
+          // 获取顶级公司ID
+          const topCompanyId = this.getTopCompanyId(companyId);
+          
+          if (!topCompanyIncome[topCompanyId]) {
+            topCompanyIncome[topCompanyId] = 0;
+          }
+          topCompanyIncome[topCompanyId] += amount;
+        }
+      });
+
+      // 转换为饼图数据格式，只显示顶级公司
+      return Object.entries(topCompanyIncome)
+        .map(([companyId, value]) => {
+          const companyName = this.getCompanyName(companyId);
+          return { name: companyName, value };
+        })
+        .sort((a, b) => b.value - a.value)
+        .slice(0, 6); // 显示前6个顶级公司
+    },
+
+    // 根据公司ID获取公司名称
+    getCompanyName(companyId) {
+      if (!this.companyData) return '未知公司';
+      
+      const companyItem = this.companyData.find(item => item.dicNo === 'Company');
+      if (!companyItem || !companyItem.data) return '未知公司';
+      
+      const company = companyItem.data.find(item => item.key === companyId);
+      return company ? company.value : '未知公司';
+    },
+
+    // 生成公司选项列表
+    generateCompanyOptions() {
+      if (!this.companyData) return;
+      
+      const companyItem = this.companyData.find(item => item.dicNo === 'Company');
+      if (!companyItem || !companyItem.data) return;
+      
+      this.companyOptions = companyItem.data.map(item => ({
+        label: item.value,
+        value: item.key
+      }));
+
+      // 生成级联选择器选项
+      this.generateCascaderOptions();
+    },
+
+    // 生成级联选择器选项
+    generateCascaderOptions() {
+      if (!this.companyData) return;
+      
+      const companyItem = this.companyData.find(item => item.dicNo === 'Company');
+      if (!companyItem || !companyItem.data) return;
+      
+      const companies = companyItem.data;
+      
+      // 构建公司树结构
+      const companyTree = this.buildCompanyTree(companies);
+      
+      // 转换为级联选择器格式，添加"所有公司"选项
+      this.companyCascaderOptions = [
+        { label: '所有公司', value: 'all', children: [] },
+        ...companyTree
+      ];
+    },
+
+    // 构建公司树结构
+    buildCompanyTree(companies) {
+      const companyMap = new Map();
+      const rootCompanies = [];
+
+      // 创建公司映射
+      companies.forEach(company => {
+        companyMap.set(company.key, {
+          label: company.value,
+          value: company.key,
+          children: []
+        });
+      });
+
+      // 构建树结构
+      companies.forEach(company => {
+        const node = companyMap.get(company.key);
+        
+        if (!company.parentId) {
+          // 顶级公司
+          rootCompanies.push(node);
+        } else {
+          // 子公司，添加到父公司
+          const parentNode = companyMap.get(company.parentId);
+          if (parentNode) {
+            parentNode.children.push(node);
+          }
+        }
+      });
+
+      return rootCompanies;
+    },
+
+    // 检查公司是否匹配（包括子公司）
+    isCompanyMatch(companyId, selectedCompanyId) {
+      if (companyId === selectedCompanyId) return true;
+      
+      // 检查是否为子公司
+      return this.isChildCompany(companyId, selectedCompanyId);
+    },
+
+    // 获取指定公司及其所有子公司的ID列表
+    getCompanyAndChildrenIds(companyId) {
+      const companyIds = [companyId];
+      
+      if (!this.companyData) return companyIds;
+      
+      const companyItem = this.companyData.find(item => item.dicNo === 'Company');
+      if (!companyItem || !companyItem.data) return companyIds;
+      
+      // 递归获取所有子公司ID
+      const getChildrenIds = (parentId) => {
+        const children = companyItem.data.filter(item => item.parentId === parentId);
+        children.forEach(child => {
+          companyIds.push(child.key);
+          getChildrenIds(child.key);
+        });
+      };
+      
+      getChildrenIds(companyId);
+      return companyIds;
+    },
+
+    // 检查是否为子公司
+    isChildCompany(companyId, parentCompanyId) {
+      if (!this.companyData) return false;
+      
+      const companyItem = this.companyData.find(item => item.dicNo === 'Company');
+      if (!companyItem || !companyItem.data) return false;
+      
+      const company = companyItem.data.find(item => item.key === companyId);
+      if (!company) return false;
+      
+      if (company.parentId === parentCompanyId) return true;
+      
+      // 递归检查上级公司
+      if (company.parentId) {
+        return this.isChildCompany(company.parentId, parentCompanyId);
+      }
+      
+      return false;
+    },
+
+    // 获取顶级公司ID
+    getTopCompanyId(companyId) {
+      if (!this.companyData) return companyId;
+      
+      const companyItem = this.companyData.find(item => item.dicNo === 'Company');
+      if (!companyItem || !companyItem.data) return companyId;
+      
+      const company = companyItem.data.find(item => item.key === companyId);
+      if (!company) return companyId;
+      
+      // 如果没有父公司，则为顶级公司
+      if (!company.parentId) return companyId;
+      
+      // 递归查找顶级公司
+      return this.getTopCompanyId(company.parentId);
+    },
+
+    // 获取剩余天数标签类型
+    getRemainDaysType(days) {
+      if (days <= 30) return 'danger';
+      if (days <= 60) return 'warning';
+      return 'success';
+    },
+
+    // 获取状态标签类型
     getStatusType(status) {
-      if (status === '待续约') {
-        return 'warning';
-      } else if (status === '即将到期') {
-        return 'danger';
-      } else {
-        return 'success';
+      if (status === '待续约') return 'danger';
+      if (status === '即将到期') return 'warning';
+      return 'success';
+    },
+
+    // 获取逾期天数标签类型
+    getOverdueType(days) {
+      if (days <= 30) return 'warning';
+      if (days <= 90) return 'danger';
+      return 'danger';
+    },
+
+    // 监听窗口大小变化
+    handleResize() {
+      if (this.incomeChart) {
+        this.incomeChart.resize();
+      }
+      if (this.pieChart) {
+        this.pieChart.resize();
       }
     }
   },
+  
   async mounted() {
-    console.log(this);
-    
-    await this.fetchPropertyData();
+    await this.fetchCompanyData();
+    await this.fetchOwnerData();
+    await this.fetchPaymentData();
     this.initCharts();
+    
+    // 监听窗口大小变化
+    window.addEventListener('resize', this.handleResize);
+  },
+
+  beforeUnmount() {
+    window.removeEventListener('resize', this.handleResize);
+    if (this.incomeChart) {
+      this.incomeChart.dispose();
+    }
+    if (this.pieChart) {
+      this.pieChart.dispose();
+    }
   }
 });
 </script>
@@ -346,7 +918,7 @@ export default defineComponent({
   left: 0;
   right: 0;
   bottom: 0;
-  background: #f6f8fc;
+  background: linear-gradient(135deg, #ffffff 0%, #cdcdcd 100%);
   overflow: hidden;
 
   :deep(.el-scrollbar) {
@@ -358,137 +930,295 @@ export default defineComponent({
   }
 
   .content-wrapper {
-    padding: 20px;
+    padding: 24px;
     box-sizing: border-box;
-    min-width: 1000px; // 设置最小宽度，防止内容挤压
-    max-width: 100%;   // 限制最大宽度
+    min-width: 1200px;
+    max-width: 100%;
   }
 
-  // 调整行间距，防止卡片挤压
-  :deep(.el-row) {
-    margin-left: -10px !important;
-    margin-right: -10px !important;
-    
-    .el-col {
-      padding-left: 10px !important;
-      padding-right: 10px !important;
-    }
-  }
-
+  // 数据概览卡片
   .data-overview {
-    margin-bottom: 20px;
+    margin-bottom: 24px;
     
-    .el-card {
-      transition: all 0.3s;
+    .stat-card {
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(10px);
+      border: none;
+      border-radius: 16px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+      transition: all 0.3s ease;
       
       &:hover {
-        transform: translateY(-3px);
-        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        transform: translateY(-4px);
+        box-shadow: 0 12px 40px rgba(0, 0, 0, 0.15);
       }
 
-      .card-header {
-        font-size: 14px;
-        color: #64748b;
-      }
-      
-      .card-number {
-        font-size: 28px;
-        font-weight: bold;
-        margin: 15px 0;
-      }
+      .stat-content {
+        display: flex;
+        align-items: center;
+        padding: 20px;
 
-      .card-footer {
-        font-size: 13px;
-        color: #94a3b8;
-      }
-    }
+        .stat-icon {
+          width: 60px;
+          height: 60px;
+          border-radius: 12px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          margin-right: 16px;
+          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+          
+          i {
+            font-size: 24px;
+            color: white;
+          }
 
-    // 为四个数据卡片添加不同的强调色
-    .el-col:nth-child(1) .card-number {
-      color: #6366f1; // 紫蓝色
-    }
-    .el-col:nth-child(2) .card-number {
-      color: #10b981; // 翠绿色
-    }
-    .el-col:nth-child(3) .card-number {
-      color: #f59e0b; // 橙色
-    }
-    .el-col:nth-child(4) .card-number {
-      color: #ec4899; // 粉色
+          &.income {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+          }
+
+          &.overdue {
+            background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+          }
+
+          &.growth {
+            background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+          }
+        }
+
+        .stat-info {
+          flex: 1;
+
+          .stat-number {
+            font-size: 28px;
+            font-weight: 700;
+            color: #1e293b;
+            margin-bottom: 4px;
+          }
+
+          .stat-label {
+            font-size: 14px;
+            color: #64748b;
+            font-weight: 500;
+          }
+        }
+      }
     }
   }
 
+  // 图表容器
   .charts-container {
-    margin-bottom: 20px;
+    margin-bottom: 24px;
     
     .chart-card {
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(10px);
+      border: none;
+      border-radius: 16px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+      
       .card-header {
         display: flex;
         justify-content: space-between;
         align-items: center;
         color: #1e293b;
-        font-weight: 500;
+        font-weight: 600;
+        font-size: 16px;
+
+        .chart-controls {
+          display: flex;
+          align-items: center;
+          gap: 16px;
+
+          .chart-legend {
+            display: flex;
+            gap: 16px;
+
+            .legend-item {
+              display: flex;
+              align-items: center;
+              font-size: 12px;
+              color: #64748b;
+
+              .legend-color {
+                width: 12px;
+                height: 12px;
+                border-radius: 2px;
+                margin-right: 6px;
+
+                &.current {
+                  background: #6366f1;
+                }
+
+                &.last-year {
+                  background: #94a3b8;
+                }
+              }
+            }
+          }
+        }
       }
     }
   }
 
+  // 租期到期提醒
   .lease-reminder {
-    margin-bottom: 20px;
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(10px);
+    border: none;
+    border-radius: 16px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+   
     
     .card-header {
       display: flex;
       justify-content: space-between;
       align-items: center;
       color: #1e293b;
-      font-weight: 500;
+      font-weight: 600;
+      font-size: 16px;
+    }
+  }
+
+  // 逾期付款提醒
+  .overdue-reminder {
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(10px);
+    border: none;
+    border-radius: 16px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+    margin-bottom: 24px;
+    .card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      color: #1e293b;
+      font-weight: 600;
+      font-size: 16px;
+    }
+
+    .overdue-amount {
+      color: #ef4444;
+      font-weight: 600;
     }
   }
 }
 
-:deep(.el-card) {
-  border: none;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+// 表格样式优化
+:deep(.el-table) {
+  background: transparent;
   border-radius: 8px;
   
-  .el-card__header {
-    border-bottom: 1px solid #f1f5f9;
-    padding: 15px;
-  }
-
-  .el-card__body {
-    padding: 15px;
-  }
-}
-
-// 修改表格样式
-:deep(.el-table) {
-  border-radius: 4px;
-  
   th {
-    background-color: #f8fafc !important;
+    background-color: rgba(248, 250, 252, 0.8) !important;
     color: #64748b;
-    font-weight: 500;
+    font-weight: 600;
+    border-bottom: 1px solid rgba(226, 232, 240, 0.8);
   }
 
   td {
     color: #475569;
+    border-bottom: 1px solid rgba(226, 232, 240, 0.5);
+  }
+
+  tr:hover > td {
+    background-color: rgba(248, 250, 252, 0.5) !important;
   }
 }
 
-// 修改标签样式
+// 标签样式优化
 :deep(.el-tag) {
-  border-radius: 4px;
+  border-radius: 6px;
+  font-weight: 500;
+  
+  &.el-tag--danger {
+    background-color: rgba(239, 68, 68, 0.1);
+    border-color: rgba(239, 68, 68, 0.2);
+    color: #dc2626;
+  }
   
   &.el-tag--warning {
-    background-color: #fff7ed;
-    border-color: #ffedd5;
-    color: #f97316;
+    background-color: rgba(245, 158, 11, 0.1);
+    border-color: rgba(245, 158, 11, 0.2);
+    color: #d97706;
   }
   
   &.el-tag--success {
-    background-color: #f0fdf4;
-    border-color: #dcfce7;
-    color: #22c55e;
+    background-color: rgba(34, 197, 94, 0.1);
+    border-color: rgba(34, 197, 94, 0.2);
+    color: #16a34a;
+  }
+}
+
+// 按钮样式优化
+:deep(.el-button--text) {
+  color: #6366f1;
+  font-weight: 500;
+  
+  &:hover {
+    color: #4f46e5;
+  }
+}
+
+// 卡片样式优化
+:deep(.el-card) {
+  .el-card__header {
+    border-bottom: 1px solid rgba(226, 232, 240, 0.8);
+    padding: 20px;
+  }
+
+  .el-card__body {
+    padding: 20px;
+  }
+}
+
+// 响应式设计
+@media (max-width: 1200px) {
+  .content-wrapper {
+    padding: 16px;
+  }
+  
+  .data-overview {
+    .stat-card {
+      .stat-content {
+        padding: 16px;
+        
+        .stat-icon {
+          width: 50px;
+          height: 50px;
+          margin-right: 12px;
+          
+          i {
+            font-size: 20px;
+          }
+        }
+        
+        .stat-info {
+          .stat-number {
+            font-size: 24px;
+          }
+        }
+      }
+    }
+  }
+}
+
+@media (max-width: 768px) {
+  .content-wrapper {
+    padding: 12px;
+    min-width: auto;
+  }
+  
+  .data-overview {
+    .el-col {
+      margin-bottom: 16px;
+    }
+  }
+  
+  .charts-container {
+    .el-col {
+      margin-bottom: 16px;
+    }
   }
 }
 </style>
