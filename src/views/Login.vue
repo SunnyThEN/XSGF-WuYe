@@ -1,6 +1,6 @@
 <template>
   <div class="login-container">
-    <div class="project-name">香山工坊资产管理中心</div>
+    <img class="project-name" style="width: 300px;height: 200px;" src="/static/xsgf-b-remove.png" />
     <div class="login-form">
       <div class="form-user" @keypress="loginPress">
         <div class="login-text">
@@ -49,7 +49,7 @@
     <div class="login-footer">
       <span>香山工坊资产管理中心 v1.0</span>
     </div>
-    <img class="login-bg" src="/static/login_bg.png" />
+    <img class="login-bg" src="/static/loginBackgroud.jpg" />
   </div>
 </template>
 
@@ -114,8 +114,9 @@ export default defineComponent({
 }
 
 .login-form {
-  align-items: center;
-  width: 50%;
+  align-items: left;
+  margin-left: 100px;
+  width: 100%;
   display: flex;
   flex-direction: column;
   z-index: 999;
@@ -192,14 +193,14 @@ export default defineComponent({
   left: 0;
   position: absolute;
   height: 100%;
-  width: 50%;
+  width: 100%;
   z-index: 0;
 }
 
 .project-name {
   position: absolute;
-  top: 40px;
-  left: 40px;
+  top: 50px;
+  left: 150px;
   z-index: 9999;
   font-weight: bolder;
   background-image: linear-gradient(to right, #1850c1, #9c009c);
@@ -217,7 +218,7 @@ export default defineComponent({
 
 .login-footer {
   position: absolute;
-  width: 50%;
+  width: 30%;
   bottom: 0.5rem;
   font-size: 14px;
   text-align: center;

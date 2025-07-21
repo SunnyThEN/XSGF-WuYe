@@ -102,7 +102,6 @@ export default {
                     PaymentEndDate: endDateStr,
                     DueAmount: ((OwnerData.MonthlyTotalFee || 0) * interval).toFixed(2).replace(/\.00$/, '')// 根据付款间隔计算应收金额
                 };
-                
                 _this.addSubRow("RMS_PaymentDetails",_this.details[0].detail,'button',_row);
                 
                 currentDate = periodEnd; // 直接使用periodEnd作为下一个周期的开始日期

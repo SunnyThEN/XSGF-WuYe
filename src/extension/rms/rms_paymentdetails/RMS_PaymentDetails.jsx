@@ -23,6 +23,7 @@ let extension = {
      //下面这些方法可以保留也可以删除
     onInit() {  //框架初始化配置前，
       this.setFiexdSearchForm(true);
+      this.columnIndex=true;
       this.columns.forEach(x => {
         if (x.field == 'DueAmount'||x.field=='ActualAmount'||x.field == 'PaymentDate'||x.field == 'PaymentStartDate') {
           x.summary = true;

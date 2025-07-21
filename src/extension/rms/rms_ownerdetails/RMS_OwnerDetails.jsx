@@ -23,7 +23,7 @@ let extension = {
      //下面这些方法可以保留也可以删除
     onInit() {  //框架初始化配置前，
       this.setFiexdSearchForm(true);
-
+      this.columnIndex=true;
     },
     onInited() {
       this.height = this.height - this.height * localStorage.getItem('proportion') /2;

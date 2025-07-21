@@ -22,19 +22,7 @@ let extension = {
   methods: {
      //下面这些方法可以保留也可以删除
     onInit() {  //框架初始化配置前，
-        //示例：在按钮的最前面添加一个按钮
-        //   this.buttons.unshift({  //也可以用push或者splice方法来修改buttons数组
-        //     name: '按钮', //按钮名称
-        //     icon: 'el-icon-document', //按钮图标：https://element.eleme.cn/#/zh-CN/component/icon
-        //     type: 'primary', //按钮样式:https://element-plus.gitee.io/zh-CN/component/button.html
-        //     //color:"#eee",//自定义按钮颜色
-        //     onClick: function () {
-        //       this.$Message.success('点击了按钮');
-        //     }
-        //   });
-
-        //示例：设置修改新建、编辑弹出框字段标签的长度
-        // this.boxOptions.labelWidth = 150;
+      this.columnIndex=true;
     },
     onInited() {
       this.columns.forEach(x => {

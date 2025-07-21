@@ -22,6 +22,7 @@ let extension = {
   methods: {
     //下面这些方法可以保留也可以删除
     onInit() {  //框架初始化配置前，
+      this.columnIndex=true;
       this.setFiexdSearchForm(true);
       this.details[0].single=true
       this.multiple.horizontal=true;
@@ -147,9 +148,6 @@ let extension = {
       this.details[0].buttons.forEach(button => {
         if (['添加行'].includes(button.name)) {
           button.onClick = async () => {
-            //const rows = this.getTable("RMS_OwnerDetails").rowData;
-            console.log(this.editFormFields.Company);
-            
             const _row = {
               OwnerName: this.editFormFields.TenantName,
               RentalStartTime: this.editFormFields.RentalStartTime,
@@ -175,27 +173,6 @@ let extension = {
               Company:OwnerRow[0].Company,
             };
             this.addSubRow("RMS_PaymentDetails",this.details[0].detail,button,_row);
-          //  const rows = this.getTable("RMS_PaymentDetails").rowData;
-            // const OwnerRow = this.getTable("RMS_OwnerDetails").getSelected();
-            // let rows = this.getCurrentDetailSelectRows('RMS_OwnerDetails');
-            // if(!rows){
-            //   this.$Message.warning('请先选择业主!');
-            //   return;
-            // }
-            // let _row = {
-            //   OwnerName: OwnerRow[0].OwnerName,
-            //   Company:OwnerRow[0].Company,
-            // };
-            // this.getTable("RMS_PaymentDetails").addRow(_row);
-            // _row=[_row]
-            //  //给二级明细添加表数据
-            // if (!rows[0]["RMS_PaymentDetails"]) {
-            //   rows[0]["RMS_PaymentDetails"] = _row;
-            // } else {
-            //   rows[0]["RMS_PaymentDetails"].push(..._row);
-            // }
-            // //三级明细表数据指向二级明细表行数据
-            // this.getTableRef("RMS_PaymentDetails").rowData = rows[0]["RMS_PaymentDetails"];
           }
         }
       })
