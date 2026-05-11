@@ -117,7 +117,7 @@
           <template #header>
             <div class="card-header">
               <span>逾期付款提醒</span>
-              <el-button type="text" size="small">查看全部</el-button>
+              <el-button type="text" size="small" @click="goToPaymentDetails">查看全部</el-button>
             </div>
           </template>
           <el-table :data="overduePayments" style="width: 100%" :max-height="300">
@@ -157,7 +157,7 @@
           <template #header>
             <div class="card-header">
               <span>租期到期提醒</span>
-              <el-button type="text" size="small">查看全部</el-button>
+              <el-button type="text" size="small" @click="goToOwnerDetails">查看全部</el-button>
             </div>
           </template>
           <el-table :data="expiringLeases" style="width: 100%" :max-height="300">
@@ -256,6 +256,14 @@ export default defineComponent({
     /** 首页金额展示：四舍五入保留两位小数 */
     formatMoney(value) {
       return formatMoney2(value);
+    },
+
+    goToPaymentDetails() {
+      this.$router.push({ name: 'RMS_PaymentDetails' });
+    },
+
+    goToOwnerDetails() {
+      this.$router.push({ name: 'RMS_OwnerDetails' });
     },
 
     // 获取商户数据

@@ -40,8 +40,8 @@
                                {"title":"租赁付款期间起","field":"PaymentStartDate","type":"date"},
                                {"title":"租赁付款期间止","field":"PaymentEndDate","type":"date"},
                                {"title":"备注","field":"Remark"}]]);
-            const searchFormFields = ref({"OwnerName":"","PaymentDate":"","PaymentStartDate":"","PaymentEndDate":"","Company":[]});
-            const searchFormOptions = ref([[{"title":"业主名称","field":"OwnerName","type":"like"},{"title":"付款日期","field":"PaymentDate","type":"datetime"},{"title":"租赁付款期间起","field":"PaymentStartDate","type":"datetime"},{"title":"租赁付款期间止","field":"PaymentEndDate","type":"datetime"},{"dataKey":"Company","data":[],"title":"公司","field":"Company","type":"treeSelect"}]]);
+            const searchFormFields = ref({"OwnerName":"","PaymentDeadline":"","PaymentDate":"","PaymentStartDate":"","PaymentEndDate":"","Company":[]});
+            const searchFormOptions = ref([[{"title":"业主名称","field":"OwnerName","type":"like"},{"title":"付款截止日期","field":"PaymentDeadline","type":"datetime"},{"title":"付款日期","field":"PaymentDate","type":"datetime"}],[{"title":"租赁付款期间起","field":"PaymentStartDate","type":"datetime"},{"title":"租赁付款期间止","field":"PaymentEndDate","type":"datetime"},{"dataKey":"Company","data":[],"title":"公司","field":"Company","type":"treeSelect"}]]);
             const columns = ref([{field:'PaymentId',title:'PaymentId',type:'int',width:110,hidden:true,readonly:true,require:true,align:'left'},
                        {field:'OwnerId',title:'OwnerId',type:'int',width:80,hidden:true,require:true,align:'left'},
                        {field:'ParentId',title:'ParentId',type:'int',width:80,hidden:true,align:'left'},
