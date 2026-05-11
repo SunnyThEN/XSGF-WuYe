@@ -34,6 +34,7 @@
       @selection-change="selectionChange"
       @row-dblclick="rowDbClick"
       @row-click="rowClick"
+      @row-contextmenu="rowContextmenu"
       @header-click="headerClick"
       :highlight-current-row="highlightCurrentRow"
       ref="table"
@@ -821,6 +822,8 @@ export default defineComponent({
       },
       errorFiled: '',
       edit: { columnIndex: -1, rowIndex: -1 }, // 当前双击编辑的行与列坐标
+      /** 树表子行 elementIndex 与 rowData 根下标不一致时，用于结束编辑/校验时取到真实行 */
+      editRowRef: null,
       editStatus: {},
       summary: false, // 是否显示合计
       // 目前只支持从后台返回的summaryData数据
@@ -1083,13 +1086,9 @@ export default defineComponent({
     },
     headerClick(column, event) {
       if (this.clickEdit && this.edit.rowIndex != -1) {
-        if (
-          this.rowEndEdit(
-            this.url ? this.rowData[this.edit.rowIndex] : this.tableData[this.edit.rowIndex],
-            column
-          )
-        ) {
-          this.edit.rowIndex = -1
+        const editingRow = this.resolveEditingRow()
+        if (editingRow) {
+          this.rowEndEdit(editingRow, column)
         }
       }
       // this.edit.rowIndex = -1;
@@ -1097,6 +1096,9 @@ export default defineComponent({
     rowDbClick(row, column, event) {
       //2021.05.23增加双击行事件
       this.$emit('rowDbClick', { row, column, event })
+    },
+    rowContextmenu(row, column, event) {
+      this.$emit('rowContextmenu', { row, column, event })
     },
     rowClick(row, column, event) {
       //2022.02.20增加点击时表格参数判断
@@ -1212,6 +1214,7 @@ export default defineComponent({
       this.errorFiled = ''
       this.edit.columnIndex = -1
       this.edit.rowIndex = -1
+      this.editRowRef = null
     },
     getHeight() {
       // 没有定义高度与最大高度，使用table默认值
@@ -1250,6 +1253,31 @@ export default defineComponent({
       } else {
         this.rowClick(row, column, event)
       }
+    },
+    /** 根据当前 edit.rowIndex 取正在编辑的行（树表不能用 rowData[index]） */
+    resolveEditingRow() {
+      if (this.edit.rowIndex == null || this.edit.rowIndex < 0) return null
+      if (
+        this.editRowRef != null &&
+        this.editRowRef.elementIndex === this.edit.rowIndex
+      ) {
+        return this.editRowRef
+      }
+      const data = this.url ? this.rowData : this.tableData
+      if (!data || !data.length) return null
+      if (this.rowParentField) {
+        const flat = []
+        const walk = (nodes) => {
+          if (!nodes || !nodes.length) return
+          nodes.forEach((n) => {
+            flat.push(n)
+            if (n.children && n.children.length) walk(n.children)
+          })
+        }
+        walk(data)
+        return flat[this.edit.rowIndex] != null ? flat[this.edit.rowIndex] : null
+      }
+      return data[this.edit.rowIndex] != null ? data[this.edit.rowIndex] : null
     },
     initIndex({ row, rowIndex }) {
       if (this.index) {
@@ -1325,6 +1353,7 @@ export default defineComponent({
         }
         this.edit.rowIndex = row.elementIndex
       }
+      this.editRowRef = row
       let col = this.columns.find((x) => {
         return x.field == (column.field || column.property)
       })
@@ -1356,22 +1385,32 @@ export default defineComponent({
             return false
           }
           this.edit.rowIndex = -1
+          this.editRowRef = null
         }
         return true
       }
       if (!this.doubleEdit && event) {
         return true
       }
-      let _row = this.url ? this.rowData[this.edit.rowIndex] : this.tableData[this.edit.rowIndex]
+      let _row = this.resolveEditingRow()
+      if (!_row) {
+        this.edit.rowIndex = -1
+        this.editRowRef = null
+        return true
+      }
       // 结束编辑前
       if (!this.endEditBefore(_row, column, this.edit.rowIndex)) return false
       if (this.edit.rowIndex != -1) {
-        //2022.06.26修复表格内容切换后行数不一致时不能编辑的问题
-        if (this.edit.rowIndex - 1 > (this.rowData || this.tableData).length) {
-          this.edit.rowIndex = -1
-          return
+        //2022.06.26修复表格内容切换后行数不一致时不能编辑的问题（树表 rowData 仅为根节点，不能用 length 判断）
+        if (!this.rowParentField) {
+          const len = (this.rowData || this.tableData).length
+          if (this.edit.rowIndex - 1 > len) {
+            this.edit.rowIndex = -1
+            this.editRowRef = null
+            return
+          }
         }
-        let row = (this.url ? this.rowData : this.tableData)[this.edit.rowIndex]
+        let row = _row
         for (let index = 0; index < this.columns.length; index++) {
           const _column = this.columns[index]
           if (_column.edit) {
@@ -1383,6 +1422,7 @@ export default defineComponent({
       }
       if (!this.endEditAfter(_row, column, this.edit.rowIndex)) return false
       this.edit.rowIndex = -1
+      this.editRowRef = null
       return true
     },
     validateRow(row, option1) {
@@ -1396,6 +1436,7 @@ export default defineComponent({
       return true
     },
     validateColum(option, data) {
+      if (!data) return true
       if (option.hidden || option.bind) return true
       let val = data[option.field]
       if (option.require || option.required) {
@@ -1492,6 +1533,7 @@ export default defineComponent({
         }
       }
       this.edit.rowIndex = -1
+      this.editRowRef = null
       return rows
     },
     addRow(row) {
@@ -2100,6 +2142,7 @@ export default defineComponent({
           return
         }
         this.edit.rowIndex = -1
+        this.editRowRef = null
       }
     },
     dateVisibleChang(show) {

@@ -3,6 +3,9 @@ import detailMethods from './detailMethods.js'
 import serviceFilter from './serviceFilter.js'
 import debounce from '../VolDebounce/index.js'
 let methods = {
+  defaultDetailLoadTree(tree, treeNode, resolve) {
+    if (resolve) resolve([])
+  },
   //当添加扩展组件gridHeader/gridBody/gridFooter及明细modelHeader/modelBody/modelFooter时，
   //如果要获取父级Vue对象,请使用此方法进行回调
   parentCall(fun) {
@@ -898,20 +901,43 @@ let methods = {
       }
     }
 
+    // 保存前将界面上的明细与主结构同步（如三级 vol-table rowData 与二级行内嵌数组引用不一致时，避免展平提交重复行）
+    this.saveBeforeCollectDetailData && this.saveBeforeCollectDetailData()
+
     //获取明细数据(前台数据明细未做校验，待完.后台已经校验)
     let details
     if (this.hasDetail) {
-      formData.detailData = this.$refs.detail.rowData
-      formData.detailData = this.convertDetailSubmitData(formData.detailData, this.detail.columns)
+      let detailRows = this.$refs.detail.rowData
+      if (this.detail.rowParentField) {
+        const ck = this.detail.detailTreeChildrenKey || 'children'
+        detailRows = this.flattenDetailTreeForSubmit(detailRows, ck)
+      }
+      formData.detailData = this.convertDetailSubmitData(detailRows, this.detail.columns)
     } else if (this.isMultiple) {
 
       //一对多明细
       details = this.details.map((c) => {
         if (c.columns) {
+          let rawRows = this.getTable(c.table).rowData
+          if (c.rowParentField) {
+            const ck = c.detailTreeChildrenKey || 'children'
+            rawRows = this.flattenDetailTreeForSubmit(rawRows, ck)
+          }
+          // 三级明细若启用树形，展平挂在一级明细行上的子表数组（如 RMS_PaymentDetails）
+          if (c.detail && c.detail.rowParentField && c.detail.table) {
+            const subCk = c.detail.detailTreeChildrenKey || 'children'
+            const subTable = c.detail.table
+            rawRows.forEach((row) => {
+              const sub = row[subTable]
+              if (Array.isArray(sub) && sub.length) {
+                row[subTable] = this.flattenDetailTreeForSubmit(sub, subCk)
+              }
+            })
+          }
           let itemDetail = {
             table: c.table,
             delKeys: c.delKeys,
-            data: this.convertDetailSubmitData(this.getTable(c.table).rowData, c.columns)
+            data: this.convertDetailSubmitData(rawRows, c.columns)
           }
           //只提交变更的明细表数据2024.08.30
           if (this.submitChangeRows) {
@@ -1059,7 +1085,8 @@ let methods = {
       if (tigger) return
       tigger = true
       let url = this.getUrl(this.const.DEL)
-      this.http.post(url, delKeys, this.$ts('正在删除数据') + '....').then((x) => {
+      var delList = true;
+      this.http.post(url, { delKeys: delKeys ,delList: delList}, this.$ts('正在删除数据') + '....').then((x) => {
         if (!x.status) return this.$error(x.message)
         this.$success(x.message)
         //删除后
@@ -1843,6 +1870,18 @@ let methods = {
       this.detailOptions.cnName = this.detail.cnName
       this.detailOptions.key = this.detail.key
       this.detailOptions.url = this.getUrl('getDetailPage')
+      this.detailOptions.rowKey = this.detail.rowKey || this.detail.key
+      this.detailOptions.rowParentField = this.detail.rowParentField || ''
+      this.detailOptions.detailTreeChildrenKey = this.detail.detailTreeChildrenKey || 'children'
+      this.detailOptions.lazy =
+        this.detail.lazy !== undefined
+          ? this.detail.lazy
+          : this.detail.rowParentField
+            ? false
+            : true
+      this.detailOptions.defaultExpandAll = this.detail.defaultExpandAll || false
+      this.detailOptions.expandRowKeys = this.detail.expandRowKeys || []
+      this.detailOptions.loadTreeChildren = this.detail.loadTreeChildren
       //计算弹出框整个table的宽度，根据宽度决定是否启用第一行显示的列为固定列
       this.setFiexdColumn(this.detail.columns, clientWidth)
     } else {

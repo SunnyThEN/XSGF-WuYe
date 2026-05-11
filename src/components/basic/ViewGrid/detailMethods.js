@@ -1,5 +1,22 @@
 //从表方法
 let detailMethods = {
+  /** 树形明细（rowParentField）提交前展平为列表，保留三级子表等其它字段，仅去掉 children 嵌套 */
+  flattenDetailTreeForSubmit(rows, childrenKey = 'children') {
+    const out = []
+    const walk = (list) => {
+      if (!list || !list.length) return
+      list.forEach((row) => {
+        if (!row || row.hidden) return
+        const children = row[childrenKey]
+        const copy = { ...row }
+        delete copy[childrenKey]
+        out.push(copy)
+        if (children && children.length) walk(children)
+      })
+    }
+    walk(rows || [])
+    return out
+  },
   //查询从表前先做内部处理
   loadInternalDetailTableBefore(param, callBack, table, item) {
     //加载明细表数据之前,需要设定查询的主表的ID
@@ -136,17 +153,29 @@ let detailMethods = {
   //三级明细查询后2023.09.17
   loadSubDetailTableAfter(rows, callBack, table, item) {
     item.keys = [];
-    //给二级明细表设置值
-    let row = this.getTableRef(item.secondTable).getSelected()[0];
-    row[item.table] = rows;
-
+    const secondRef = this.getTableRef(item.secondTable);
+    const row = secondRef && secondRef.getSelected()[0];
+    // 不可在此处 row[item.table]=rows：VolTable 的 loadAfter 触发早于其内部 convertTree 与 rowData 赋值。
+    // 若二级行存扁平接口数据、表格存树形 rowData，引用分离后 detailRowOnChange 会用扁平再次赋给表格，
+    // 树形子行丢失或展平重复（如 RMS_PaymentDetails 带 ParentId 时）。
+    let status = true;
     if (!this.searchSubDetailAfter) {
       callBack(true);
-      return;
+    } else {
+      status = this.searchSubDetailAfter(rows, table, item);
+      callBack(status);
     }
-    //三级明细查询后
-    let status = this.searchSubDetailAfter(rows, table, item);
-    callBack(status);
+    const vm = this;
+    const subTable = table;
+    this.$nextTick(() => {
+      if (!row) return;
+      const subRef = vm.getTableRef(subTable);
+      if (subRef && Array.isArray(subRef.rowData)) {
+        row[subTable] = subRef.rowData;
+      } else {
+        row[subTable] = Array.isArray(rows) ? rows : [];
+      }
+    });
   },
   // detailRowOnChange(row,table) {
   //   this.detailRowChange(row);
@@ -173,6 +202,12 @@ let detailMethods = {
     this.detailRowClick({ row, column, event, item });
   },
   detailRowClick({ row, column, event, item }) { },
+  detailRowOnContextmenu({ row, column, event, item }) {
+    this.detailRowContextmenu({ row, column, event, item });
+  },
+  detailRowContextmenu({ row, column, event, item }) {},
+  /** 保存组装 formData.details 前调用；扩展可覆盖以同步多级明细引用 */
+  saveBeforeCollectDetailData() {},
   resetDetailTable(row, isAdd) {
     //重置三级明细
     if (this.subDetails.length) {

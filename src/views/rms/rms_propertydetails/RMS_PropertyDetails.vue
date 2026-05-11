@@ -49,7 +49,7 @@
                                {"dataKey":"enable","data":[],"title":"是否闲置","field":"Isidle","type":"switch"}],
                               [{"title":"备注","field":"Remark","colSize":12,"type":"textarea"}]]);
             const searchFormFields = ref({"TenantName":"","TenantId":"","Buildings":"","Floor":"","RoomNumber":"","ContractNumber":"","RentalStartTime":"","RentalEndTime":"","TitleDeedNumber":"","Company":[]});
-            const searchFormOptions = ref([[{"dataKey":"Company","data":[],"title":"公司","field":"Company","type":"cascader"},{"title":"楼幢","field":"Buildings"},{"title":"楼层","field":"Floor"},{"title":"室号","field":"RoomNumber"},{"title":"合同编号","field":"ContractNumber"}],[{"title":"承租方识别号","field":"TenantId"},{"title":"承租方名称","field":"TenantName"},{"title":"租赁起始日期","field":"RentalStartTime","type":"date"},{"title":"租赁结束日期","field":"RentalEndTime","type":"date"},{"title":"房产证编号","field":"TitleDeedNumber"}]]);
+            const searchFormOptions = ref([[{"dataKey":"Company","data":[],"title":"公司","field":"Company","type":"cascader"},{"title":"楼幢","field":"Buildings"},{"title":"楼层","field":"Floor"},{"title":"室号","field":"RoomNumber"},{"title":"合同编号","field":"ContractNumber"}],[{"title":"承租方识别号","field":"TenantId","type":"like"},{"title":"承租方名称","field":"TenantName","type":"like"},{"title":"租赁起始日期","field":"RentalStartTime","type":"date"},{"title":"租赁结束日期","field":"RentalEndTime","type":"date"},{"title":"房产证编号","field":"TitleDeedNumber"}]]);
             const columns = ref([{field:'PropertyId',title:'PropertyId',type:'int',width:110,hidden:true,readonly:true,require:true,align:'left'},
                        {field:'TenantName',title:'承租方名称',type:'string',link:true,width:300,align:'left'},
                        {field:'TenantId',title:'承租方识别号',type:'string',width:300,align:'left'},
@@ -88,10 +88,10 @@
                        {field:'RentalTime',title:'租赁期',type:'string',width:110,align:'left'},
                        {field:'MonthlyRent',title:'月租金',type:'string',width:120,align:'left'},
                        {field:'MonthlyManageFee',title:'月管理费',type:'string',width:120,align:'left'},
-                       {field:'MonthlyTotalFee',title:'月计',type:'string ',width:110,align:'left'},
+                       {field:'MonthlyTotalFee',title:'月计',type:'string',width:110,align:'left'},
                        {field:'Rent',title:'总租金',type:'string',width:110,edit:{type:''},align:'left'},
                        {field:'ManageFee',title:'总管理费',type:'string',width:110,edit:{type:''},align:'left'},
-                       {field:'TotalFee',title:'总计',type:'string ',width:110,edit:{type:''},align:'left'},
+                       {field:'TotalFee',title:'总计',type:'string',width:110,edit:{type:''},align:'left'},
                        {field:'CreateID',title:'CreateID',type:'int',width:80,hidden:true,align:'left'},
                        {field:'Creator',title:'创建人',type:'string',width:100,hidden:true,align:'left'},
                        {field:'CreateDate',title:'创建时间',type:'datetime',width:110,hidden:true,align:'left'},
@@ -117,12 +117,15 @@
                                     delKeys:[],
                                     columns: [{field:'PaymentId',title:'PaymentId',type:'int',width:110,hidden:true,readonly:true,require:true,align:'left'},
                                               {field:'OwnerId',title:'OwnerId',type:'int',width:80,hidden:true,require:true,align:'left'},
+                                              {field:'ParentId',title:'ParentId',type:'int',width:80,hidden:true,align:'left'},
                                               {field:'OwnerName',title:'业主名称',type:'string',width:120,align:'left'},
                                               {field:'DueAmount',title:'应收金额',type:'float',width:110,edit:{type:''},align:'left'},
+                                              {field:'DiscountAmount',title:'优惠金额',type:'float',width:110,edit:{type:''},align:'left'},
                                               {field:'ActualAmount',title:'实收金额',type:'float',width:110,edit:{type:''},align:'left'},
+                                              {field:'PaymentDeadline',title:'付款截止日期',type:'datetime',width:150,edit:{type:'date'},align:'left'},
                                               {field:'PaymentDate',title:'付款日期',type:'datetime',width:110,edit:{type:'date'},align:'left'},
-                                              {field:'PaymentStartDate',title:'付款期间起',type:'datetime',width:110,edit:{type:'date'},align:'left'},
-                                              {field:'PaymentEndDate',title:'付款期间止',type:'datetime',width:110,edit:{type:'date'},align:'left'},
+                                              {field:'PaymentStartDate',title:'租赁付款期间起',type:'datetime',width:110,edit:{type:'date'},align:'left'},
+                                              {field:'PaymentEndDate',title:'租赁付款期间止',type:'datetime',width:110,edit:{type:'date'},align:'left'},
                                               {field:'Remark',title:'备注',type:'string',width:150,edit:{type:''},align:'left'},
                                               {field:'Company',title:'公司',type:'guid',bind:{ key:'Company',data:[]},width:110,align:'left'},]
                              }

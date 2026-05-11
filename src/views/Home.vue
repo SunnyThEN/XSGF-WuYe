@@ -25,7 +25,7 @@
                     <i class="el-icon-money"></i>
                   </div>
                   <div class="stat-info">
-                    <div class="stat-number">{{ currentMonthIncome }}元</div>
+                    <div class="stat-number">{{ formatMoney(currentMonthIncome) }}元</div>
                     <div class="stat-label">本月收入</div>
                   </div>
                 </div>
@@ -38,7 +38,7 @@
                     <i class="el-icon-warning"></i>
                   </div>
                   <div class="stat-info">
-                    <div class="stat-number">{{ overdueAmount }}元</div>
+                    <div class="stat-number">{{ formatMoney(overdueAmount) }}元</div>
                     <div class="stat-label">逾期金额</div>
                   </div>
                 </div>
@@ -122,19 +122,20 @@
           </template>
           <el-table :data="overduePayments" style="width: 100%" :max-height="300">
             <el-table-column prop="ownerName" label="商户名称" />
-            <el-table-column prop="paymentStartDate" label="付款期间" >
+            <el-table-column prop="paymentDeadline" label="付款截止日" width="110" />
+            <el-table-column prop="paymentStartDate" label="租赁付款期间" >
               <template #default="scope">
                 {{ scope.row.paymentStartDate }} ~ {{ scope.row.paymentEndDate }}
               </template>
             </el-table-column>
-            <el-table-column prop="dueAmount" label="应收金额" >
+            <el-table-column prop="netReceivable" label="净应收" >
               <template #default="scope">
-                {{ scope.row.dueAmount }}元
+                {{ formatMoney(scope.row.netReceivable) }}元
               </template>
             </el-table-column>
             <el-table-column prop="actualAmount" label="实收金额" >
               <template #default="scope">
-                {{ scope.row.actualAmount || 0 }}元
+                {{ formatMoney(scope.row.actualAmount) }}元
               </template>
             </el-table-column>
             <el-table-column prop="overdueDays" label="逾期天数">
@@ -146,7 +147,7 @@
             </el-table-column>
             <el-table-column prop="overdueAmount" label="逾期金额">
               <template #default="scope">
-                <span class="overdue-amount">{{ scope.row.overdueAmount }}元</span>
+                <span class="overdue-amount">{{ formatMoney(scope.row.overdueAmount) }}元</span>
               </template>
             </el-table-column>
           </el-table>
@@ -172,7 +173,7 @@
             </el-table-column>
             <el-table-column prop="monthlyRent" label="月租金" >
               <template #default="scope">
-                {{ scope.row.monthlyRent }}元
+                {{ formatMoney(scope.row.monthlyRent) }}元
               </template>
             </el-table-column>
             <el-table-column prop="status" label="状态">
@@ -195,6 +196,43 @@
 import { defineComponent } from 'vue';
 import * as echarts from 'echarts';
 
+/** 付款主行（分期子行不参与首页逾期统计） */
+function isPaymentMainRowForDashboard(item) {
+  const p = item.ParentId;
+  return p === null || p === undefined || p === '' || Number(p) === 0;
+}
+
+/** 真正应收 = 应收金额 - 优惠金额 */
+function getPaymentNetReceivableForDashboard(item) {
+  const due = Number(item.DueAmount) || 0;
+  const discount = Number(item.DiscountAmount) || 0;
+  return Math.max(0, due - discount);
+}
+
+/** 与付款明细页一致：已过付款截止日且未收齐（按净应收） */
+function isOverdueUnpaidPaymentItem(item, nowMs) {
+  if (!isPaymentMainRowForDashboard(item)) return false;
+  if (!item.PaymentDeadline) return false;
+  const deadline = new Date(item.PaymentDeadline).getTime();
+  if (Number.isNaN(deadline) || deadline >= nowMs) return false;
+  const net = getPaymentNetReceivableForDashboard(item);
+  const actual = item.ActualAmount;
+  if (actual == null) return true;
+  return Number(actual) < net;
+}
+
+/** 金额四舍五入到分（数字，用于汇总） */
+function roundMoney2(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return 0;
+  return Math.round(n * 100) / 100;
+}
+
+/** 金额四舍五入保留两位小数（展示字符串） */
+function formatMoney2(value) {
+  return roundMoney2(value).toFixed(2);
+}
+
 export default defineComponent({
   data() {
     return {
@@ -215,6 +253,11 @@ export default defineComponent({
     }
   },
   methods: {
+    /** 首页金额展示：四舍五入保留两位小数 */
+    formatMoney(value) {
+      return formatMoney2(value);
+    },
+
     // 获取商户数据
     async fetchOwnerData() {
       try {
@@ -286,43 +329,45 @@ export default defineComponent({
       }
 
       // 计算本月收入
-      this.currentMonthIncome = this.paymentData
-        .filter(item => {
-          if (!item.PaymentDate) return false;
-          const paymentDate = new Date(item.PaymentDate);
-          const isCurrentMonth = paymentDate.getFullYear() === currentYear && 
-                                paymentDate.getMonth() === currentMonth &&
-                                item.ActualAmount;
-          
-          // 如果选择了特定公司，则过滤数据
-          if (targetCompanyIds && !targetCompanyIds.includes(item.Company)) {
-            return false;
-          }
-          
-          return isCurrentMonth;
-        })
-        .reduce((sum, item) => sum + (Number(item.ActualAmount) || 0), 0);
+      this.currentMonthIncome = roundMoney2(
+        this.paymentData
+          .filter(item => {
+            if (!item.PaymentDate) return false;
+            const paymentDate = new Date(item.PaymentDate);
+            const isCurrentMonth = paymentDate.getFullYear() === currentYear && 
+                                  paymentDate.getMonth() === currentMonth &&
+                                  item.ActualAmount;
+            
+            // 如果选择了特定公司，则过滤数据
+            if (targetCompanyIds && !targetCompanyIds.includes(item.Company)) {
+              return false;
+            }
+            
+            return isCurrentMonth;
+          })
+          .reduce((sum, item) => sum + (Number(item.ActualAmount) || 0), 0)
+      );
 
-      // 计算逾期金额
-      this.overdueAmount = this.paymentData
-        .filter(item => {
-          if (!item.PaymentStartDate) return false;
-          const startDate = new Date(item.PaymentStartDate);
-          const isOverdue = startDate < now && 
-                           (item.ActualAmount == null || Number(item.ActualAmount) < Number(item.DueAmount));
-          
-          // 如果选择了特定公司，则过滤数据
-          if (targetCompanyIds && !targetCompanyIds.includes(item.Company)) {
-            return false;
-          }
-          
-          return isOverdue;
-        })
-        .reduce((sum, item) => {
-          const dueAmount = Number(item.DueAmount) || 0;
-          const actualAmount = Number(item.ActualAmount) || 0;
-          return sum + (dueAmount - actualAmount);
-        }, 0);
+      // 计算逾期金额（按付款截止日期、净应收、仅主行）
+      const nowMs = now.getTime();
+      this.overdueAmount = roundMoney2(
+        this.paymentData
+          .filter(item => {
+            if (!isOverdueUnpaidPaymentItem(item, nowMs)) return false;
+            if (targetCompanyIds && !targetCompanyIds.includes(item.Company)) {
+              return false;
+            }
+            return true;
+          })
+          .reduce((sum, item) => {
+            const net = getPaymentNetReceivableForDashboard(item);
+            const actualAmount =
+              item.ActualAmount == null || item.ActualAmount === ''
+                ? 0
+                : Number(item.ActualAmount) || 0;
+            return sum + Math.max(0, net - actualAmount);
+          }, 0)
+      );
 
       // 计算同比增长
       this.calculateYearOverYearGrowth();
@@ -408,7 +453,7 @@ export default defineComponent({
             room: `${item.Buildings || ''}-${item.Floor || ''}-${item.RoomNumber || ''}`,
             expireDate: item.RentalEndTime.split(' ')[0],
             remainDays: remainDays,
-            monthlyRent: Number(item.MonthlyRent) || 0,
+            monthlyRent: roundMoney2(Number(item.MonthlyRent) || 0),
             status: remainDays <= 30 ? '待续约' : (remainDays <= 60 ? '即将到期' : '正常')
           };
         })
@@ -417,17 +462,15 @@ export default defineComponent({
         .slice(0, 10); // 只显示前10条
     },
 
-    // 更新逾期付款列表
+    // 更新逾期付款列表（按付款截止日、净应收、仅主行）
     updateOverduePayments() {
       if (!this.paymentData) return;
 
       const now = new Date();
-      let filteredData = this.paymentData.filter(item => {
-        if (!item.PaymentStartDate) return false;
-        const startDate = new Date(item.PaymentStartDate);
-        return startDate < now && 
-               (item.ActualAmount == null || Number(item.ActualAmount) < Number(item.DueAmount));
-      });
+      const nowMs = now.getTime();
+      let filteredData = this.paymentData.filter((item) =>
+        isOverdueUnpaidPaymentItem(item, nowMs)
+      );
 
       // 如果选择了特定公司，则过滤数据
       if (this.selectedCompany && this.selectedCompany !== 'all') {
@@ -437,19 +480,29 @@ export default defineComponent({
 
       this.overduePayments = filteredData
         .map(item => {
-          const startDate = new Date(item.PaymentStartDate);
-          const overdueDays = Math.ceil((now - startDate) / (1000 * 60 * 60 * 24));
-          const dueAmount = Number(item.DueAmount) || 0;
-          const actualAmount = Number(item.ActualAmount) || 0;
-          
+          const deadline = new Date(item.PaymentDeadline);
+          const overdueDays = Math.ceil((nowMs - deadline.getTime()) / (1000 * 60 * 60 * 24));
+          const netReceivable = roundMoney2(getPaymentNetReceivableForDashboard(item));
+          const actualAmount = roundMoney2(
+            item.ActualAmount == null || item.ActualAmount === ''
+              ? 0
+              : Number(item.ActualAmount) || 0
+          );
+
           return {
             ownerName: item.OwnerName || '未知商户',
-            paymentStartDate: item.PaymentStartDate.split(' ')[0],
+            paymentDeadline: item.PaymentDeadline
+              ? item.PaymentDeadline.split(' ')[0]
+              : '',
+            paymentStartDate: item.PaymentStartDate
+              ? item.PaymentStartDate.split(' ')[0]
+              : '',
             paymentEndDate: item.PaymentEndDate ? item.PaymentEndDate.split(' ')[0] : '',
-            dueAmount: dueAmount,
-            actualAmount: actualAmount,
+            dueAmount: roundMoney2(Number(item.DueAmount) || 0),
+            netReceivable,
+            actualAmount,
             overdueDays: overdueDays,
-            overdueAmount: dueAmount - actualAmount
+            overdueAmount: roundMoney2(Math.max(0, netReceivable - actualAmount))
           };
         })
         .sort((a, b) => b.overdueDays - a.overdueDays)
@@ -519,6 +572,14 @@ export default defineComponent({
             label: {
               backgroundColor: '#6a7985'
             }
+          },
+          formatter: (params) => {
+            if (!params || !params.length) return '';
+            let html = params[0].axisValue + '<br/>';
+            params.forEach((p) => {
+              html += `${p.marker}${p.seriesName}: ${formatMoney2(p.value)}元<br/>`;
+            });
+            return html.replace(/<br\/>$/, '');
           }
         },
         legend: {
@@ -539,7 +600,7 @@ export default defineComponent({
           type: 'value',
           name: '金额(元)',
           axisLabel: {
-            formatter: '{value}'
+            formatter: (val) => formatMoney2(val)
           }
         },
         color: ['#6366f1', '#94a3b8'],
@@ -586,7 +647,8 @@ export default defineComponent({
       pie.setOption({
         tooltip: {
           trigger: 'item',
-          formatter: '{a} <br/>{b}: {c}元 ({d}%)',
+          formatter: (p) =>
+            `${p.seriesName}<br/>${p.marker}${p.name}: ${formatMoney2(p.value)}元 (${p.percent}%)`,
           confine: false,
           appendToBody: true
         },
@@ -618,7 +680,8 @@ export default defineComponent({
               label: {
                 show: true,
                 fontSize: '18',
-                fontWeight: 'bold'
+                fontWeight: 'bold',
+                formatter: (p) => `${p.name}\n${formatMoney2(p.value)}元`
               }
             },
             labelLine: {
@@ -667,8 +730,8 @@ export default defineComponent({
       });
 
       return {
-        currentYear: currentYearData,
-        lastYear: lastYearData
+        currentYear: currentYearData.map(roundMoney2),
+        lastYear: lastYearData.map(roundMoney2)
       };
     },
 
@@ -705,7 +768,7 @@ export default defineComponent({
       return Object.entries(topCompanyIncome)
         .map(([companyId, value]) => {
           const companyName = this.getCompanyName(companyId);
-          return { name: companyName, value };
+          return { name: companyName, value: roundMoney2(value) };
         })
         .sort((a, b) => b.value - a.value)
         .slice(0, 6); // 显示前6个顶级公司

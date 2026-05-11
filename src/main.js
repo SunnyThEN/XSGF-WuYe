@@ -47,7 +47,7 @@ app.config.globalProperties.$global = {
   menuSearch: false, //菜单是否启用搜索功能
   navSearch: false, //导航是否启用菜单搜索功能2024.06.26
   table: {
-    smallCell: false, //表格单元格大小
+    smallCell: true, //表格单元格大小
     useTag: true, //table组件下拉框数据源的字段是否显示背景颜色
     showAudit: true, //表格是否显示【查看流程】
     boxAudit: false//编辑弹出框中显示审批按钮2024.07.03(与上面的showAudit同时开启才会生效)

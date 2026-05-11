@@ -5,21 +5,6 @@
 *****************************************************************************************/
 //此js文件是用来自定义扩展业务代码，可以扩展一些自定义页面或者重新配置生成的代码
 
-function ensureParentIdColumn(columns, insertAfterField) {
-  if (!columns || !columns.length) return
-  if (columns.some((c) => c.field === 'ParentId')) return
-  const col = {
-    field: 'ParentId',
-    title: '上级',
-    type: 'int',
-    width: 100,
-    hidden: true,
-    align: 'left'
-  }
-  const i = columns.findIndex((c) => c.field === insertAfterField)
-  columns.splice(i >= 0 ? i + 1 : 0, 0, col)
-}
-
 let extension = {
   components: {
     //查询界面扩展组件
@@ -37,28 +22,24 @@ let extension = {
   methods: {
      //下面这些方法可以保留也可以删除
     onInit() {  //框架初始化配置前，
-      this.setFiexdSearchForm(true);
-      this.columnIndex=true;
-      const d = this.detail;
-      if (d && d.table === 'RMS_PaymentDetails') {
-        d.rowKey = d.rowKey || d.key || 'PaymentId';
-        d.rowParentField = 'ParentId';
-        d.lazy = false;
-        d.defaultExpandAll = true;
-        ensureParentIdColumn(d.columns, 'PaymentId');
-      }
+        //示例：在按钮的最前面添加一个按钮
+        //   this.buttons.unshift({  //也可以用push或者splice方法来修改buttons数组
+        //     name: '按钮', //按钮名称
+        //     icon: 'el-icon-document', //按钮图标：https://element.eleme.cn/#/zh-CN/component/icon
+        //     type: 'primary', //按钮样式:https://element-plus.gitee.io/zh-CN/component/button.html
+        //     //color:"#eee",//自定义按钮颜色
+        //     onClick: function () {
+        //       this.$Message.success('点击了按钮');
+        //     }
+        //   });
+
+        //示例：设置修改新建、编辑弹出框字段标签的长度
+        // this.boxOptions.labelWidth = 150;
     },
     onInited() {
-      this.height = this.height - this.height * localStorage.getItem('proportion') /2;
-      this.summary = true;
-      this.columns.forEach(x => {
-        if (x.field == 'Rent'||x.field=='ManageFee'||x.field=='TotalFee') {
-          x.summary = true;
-          x.summaryFormatter = (val, column, rows, summaryData) => {
-              return val.toFixed(2).replace(/\.00$/, '');
-          };
-        }
-      })
+      //框架初始化配置后
+      //如果要配置明细表,在此方法操作
+      //this.detailOptions.columns.forEach(column=>{ });
     },
     searchBefore(param) {
       //界面查询前,可以给param.wheres添加查询参数

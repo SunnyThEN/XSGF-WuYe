@@ -255,6 +255,10 @@ let viewgird = [
         path: '/RMS_PaymentDetails',
         name: 'RMS_PaymentDetails',
         component: () => import('@/views/rms/rms_paymentdetails/RMS_PaymentDetails.vue')
+    }    ,{
+        path: '/RMS_ApplicationForm',
+        name: 'RMS_ApplicationForm',
+        component: () => import('@/views/rms/rms_applicationform/RMS_ApplicationForm.vue')
     }]
 
 export default viewgird

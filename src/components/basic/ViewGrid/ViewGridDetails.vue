@@ -67,6 +67,11 @@
             rowClick(ops, item)
           }
         "
+        @rowContextmenu="
+          (ops) => {
+            rowContextmenu(ops, item)
+          }
+        "
         :url="url"
         :load-key="true"
         :index="true"
@@ -87,6 +92,12 @@
         :select2Count="1000"
         :selectable="item.selectable"
         :sortable="item.sortable"
+        :rowKey="item.rowKey || item.key"
+        :rowParentField="item.rowParentField || ''"
+        :lazy="item.lazy !== undefined ? item.lazy : item.rowParentField ? false : true"
+        :defaultExpandAll="item.defaultExpandAll || false"
+        :expandRowKeys="item.expandRowKeys || []"
+        :loadTreeChildren="item.loadTreeChildren || defaultLoadTreeChildren"
         @sortEnd="(newIndex,oldIndex,rows)=>{sortEnd(newIndex,oldIndex,rows,item)}"
       ></vol-table>
     </div>
@@ -144,6 +155,10 @@ export default {
       activeName.value = props.data[0].table
     }
 
+    const defaultLoadTreeChildren = (tree, treeNode, resolve) => {
+      if (resolve) resolve([])
+    }
+
     const url = `api/${props.mainTable.replaceAll('/', '')}/getDetailPage`
 
     const loadBefore = (rows, callBack, item) => {
@@ -170,6 +185,14 @@ export default {
     }
     const rowClick = (ops, item) => {
       context.emit('rowClick', {
+        row: ops.row,
+        column: ops.column,
+        event: ops.event,
+        item
+      })
+    }
+    const rowContextmenu = (ops, item) => {
+      context.emit('rowContextmenu', {
         row: ops.row,
         column: ops.column,
         event: ops.event,
@@ -295,6 +318,7 @@ export default {
       loadAfter,
       rowChange,
       rowClick,
+      rowContextmenu,
       //  height,
       tabsClick,
       btnClick,
@@ -302,7 +326,8 @@ export default {
       clearFreeze,
       getDiffRows,
       setTable,
-      sortEnd
+      sortEnd,
+      defaultLoadTreeChildren
     }
   }
 }

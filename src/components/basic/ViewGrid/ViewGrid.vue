@@ -314,6 +314,7 @@
                     @loadAfter="loadDetailTableAfter"
                     @rowChange="detailRowOnChange"
                     @rowClick="detailRowOnClick"
+                    @rowContextmenu="detailRowOnContextmenu"
                     :url="detailOptions.url"
                     :load-key="true"
                     :index="true"
@@ -334,6 +335,18 @@
                     :selectable="detailSelectable"
                     :spanMethod="detailSpanMethod"
                     :sortable="detailOptions.sortable"
+                    :rowKey="detailOptions.rowKey || detailOptions.key"
+                    :rowParentField="detailOptions.rowParentField || ''"
+                    :lazy="
+                      detailOptions.lazy !== undefined
+                        ? detailOptions.lazy
+                        : detailOptions.rowParentField
+                          ? false
+                          : true
+                    "
+                    :defaultExpandAll="detailOptions.defaultExpandAll || false"
+                    :expandRowKeys="detailOptions.expandRowKeys || []"
+                    :loadTreeChildren="detailOptions.loadTreeChildren || defaultDetailLoadTree"
                     @onSortEnd="detailOnSortEnd"
                   ></vol-table>
                 </div>
@@ -354,6 +367,7 @@
                     @loadAfter="loadDetailTableAfter"
                     @rowChange="detailRowOnChange"
                     @rowClick="detailRowOnClick"
+                    @rowContextmenu="detailRowOnContextmenu"
                     @tabsClick="tabsClick"
                     v-if="details.length"
                     :main-table="table.url"
@@ -375,6 +389,7 @@
                     @loadBefore="loadSubInternalDetailTableBefore"
                     @loadAfter="loadSubDetailTableAfter"
                     @rowClick="detailRowOnClick"
+                    @rowContextmenu="detailRowOnContextmenu"
                     :main-table="table.url"
                     :height="multiple.horizontal ? detailHeight : 200"
                     @tabsClick="tabsClick"
@@ -654,6 +669,13 @@ var vueParam = {
         columnIndex: false, //2020.11.01明细是否显示行号
         ck: true, //2020.11.01明细是否显示checkbox
         sortable: false, //表格是否可以拖拽排序2024.10.06
+        rowKey: '',
+        rowParentField: '',
+        detailTreeChildrenKey: 'children',
+        lazy: true,
+        defaultExpandAll: false,
+        expandRowKeys: [],
+        loadTreeChildren: null
       },
       auditParam: {
         //审核对象

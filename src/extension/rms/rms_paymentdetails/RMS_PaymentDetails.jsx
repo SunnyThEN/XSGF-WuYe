@@ -5,6 +5,13 @@
 *****************************************************************************************/
 //此js文件是用来自定义扩展业务代码，可以扩展一些自定义页面或者重新配置生成的代码
 
+/** 真正应收 = 应收金额 - 优惠金额（不小于 0） */
+function getNetReceivable(row) {
+  const due = Number(row.DueAmount) || 0;
+  const discount = Number(row.DiscountAmount) || 0;
+  return Math.max(0, due - discount);
+}
+
 let extension = {
   components: {
     //查询界面扩展组件
@@ -20,41 +27,57 @@ let extension = {
   tableAction: '', //指定某张表的权限(这里填写表名,默认不用填写)
   buttons: { view: [], box: [], detail: [] }, //扩展的按钮
   methods: {
-     //下面这些方法可以保留也可以删除
+    //下面这些方法可以保留也可以删除
     onInit() {  //框架初始化配置前，
       this.setFiexdSearchForm(true);
-      this.columnIndex=true;
+      this.columnIndex = true;
+      this.lazy = false;
+      this.rowKey = this.table.key || 'PaymentId';
+      this.rowParentField = 'ParentId';
+      this.defaultExpandAll = false;
       this.columns.forEach(x => {
-        if (x.field == 'DueAmount'||x.field=='ActualAmount'||x.field == 'PaymentDate'||x.field == 'PaymentStartDate') {
+        if (x.field == 'DueAmount' || x.field == 'ActualAmount' || x.field == 'PaymentDate' || x.field == 'PaymentStartDate') {
           x.summary = true;
           x.summaryFormatter = (val, column, rows, summaryData) => {
-            if(x.field == 'PaymentStartDate'){
-              return "未收："+val;
-            }else  if(x.field == 'PaymentDate'){
-              return "应收未收："+val;
+            if (x.field == 'PaymentStartDate') {
+              return "未收：" + val;
+            } else if (x.field == 'PaymentDate') {
+              return "应收未收：" + val;
             }
-            else{
+            else {
               return val.toFixed(2).replace(/\.00$/, '');
             }
           };
         }
-     
-          x.cellStyle = (row, rowIndex, columnIndex) => {
-            const now = new Date().getTime();
-            const startDate = new Date(row.PaymentStartDate).getTime();
-            if (row.ActualAmount == null && startDate < now) {
-              return {
-                background: '#FF8A65'
-              };
-            }
-            if (row.ActualAmount <row.DueAmount && startDate < now) {
-              return {
-                background: '#FFEE58'
-              };
-            }
+
+        x.cellStyle = (row, rowIndex, columnIndex) => {
+          // 树形子行（分期子付款）不参与标色，仅主数据按付款截止日期标色
+          const pid = row.ParentId;
+          const isMainRow = pid == null || pid === '' || pid === 0;
+          if (!isMainRow) {
             return {};
-          };
-      
+          }
+          const deadlineMs = row.PaymentDeadline
+            ? new Date(row.PaymentDeadline).getTime()
+            : NaN;
+          if (Number.isNaN(deadlineMs)) {
+            return {};
+          }
+          const now = Date.now();
+          const netDue = getNetReceivable(row);
+          if (row.ActualAmount == null && deadlineMs < now) {
+            return {
+              background: '#FF8A65'
+            };
+          }
+          if (row.ActualAmount < netDue && deadlineMs < now) {
+            return {
+              background: '#FFEE58'
+            };
+          }
+          return {};
+        };
+
       })
     },
     onInited() {
@@ -68,30 +91,33 @@ let extension = {
     searchAfter(result) {
       // 对结果进行排序，将符合条件的行靠前排
       if (result) {
-        const now = new Date().getTime();
+        const now = Date.now();
+        const rowNeedsPriority = (row) => {
+          const pid = row.ParentId;
+          if (!(pid == null || pid === '' || pid === 0)) {
+            return false;
+          }
+          const d = row.PaymentDeadline
+            ? new Date(row.PaymentDeadline).getTime()
+            : NaN;
+          if (Number.isNaN(d) || d >= now) {
+            return false;
+          }
+          const netDue = getNetReceivable(row);
+          return (
+            row.ActualAmount == null ||
+            row.ActualAmount < netDue
+          );
+        };
         result.sort((a, b) => {
-          const aStartDate = new Date(a.PaymentStartDate).getTime();
-          const bStartDate = new Date(b.PaymentStartDate).getTime();
-          
-          // 检查a行是否符合条件
-          const aCondition1 = a.ActualAmount == null && aStartDate < now;
-          const aCondition2 = a.ActualAmount < a.DueAmount && aStartDate < now;
-          const aPriority = aCondition1 || aCondition2;
-          
-          // 检查b行是否符合条件
-          const bCondition1 = b.ActualAmount == null && bStartDate < now;
-          const bCondition2 = b.ActualAmount < b.DueAmount && bStartDate < now;
-          const bPriority = bCondition1 || bCondition2;
-          
-          // 符合条件的行排在前面
+          const aPriority = rowNeedsPriority(a);
+          const bPriority = rowNeedsPriority(b);
           if (aPriority && !bPriority) return -1;
           if (!aPriority && bPriority) return 1;
-          
-          // 如果都符合或都不符合条件，按原顺序排列
           return 0;
         });
       }
-      
+
       return true;
     },
     addBefore(formData) {
