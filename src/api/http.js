@@ -13,12 +13,15 @@ let loadingStatus = false
 let dataViewUrl
 if (process.env.NODE_ENV == 'development') {
   axios.defaults.baseURL = 'http://localhost:9100/'
+  //axios.defaults.baseURL = 'http://192.168.0.249:9100/'
   //大屏本地地址
   dataViewUrl = 'http://localhost:9200/'
 } else if (process.env.NODE_ENV == 'debug') {
-  axios.defaults.baseURL = 'http://192.168.1.100:9100/'
+ // axios.defaults.baseURL = 'http://192.168.1.100:9100/'
+  axios.defaults.baseURL = 'http://192.168.0.249:9100/'
 } else if (process.env.NODE_ENV == 'production') {
-  axios.defaults.baseURL = 'http://192.168.1.100:9100/'
+  //axios.defaults.baseURL = 'http://192.168.1.100:9100/'
+  axios.defaults.baseURL = 'http://192.168.0.249:9100/'
   //大屏发布的地址
   dataViewUrl = 'http://data.volcore.xyz/'
 }

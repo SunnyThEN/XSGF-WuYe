@@ -65,7 +65,8 @@
                        {field:'TenantId',title:'承租方识别号',type:'string',width:120,align:'left'},
                        {field:'ContractNumber',title:'合同编号',type:'string',width:120,align:'left'},
                        {field:'Company',title:'公司',type:'guid',bind:{ key:'Company',data:[]},width:110,align:'left'}]);
-            const detail = ref(  {
+            const detail = ref({columns:[]});
+            const details = ref([  { 
                     cnName: '付款明细',
                     table: 'RMS_PaymentDetails',
                     columns: [{field:'PaymentId',title:'PaymentId',type:'int',width:110,hidden:true,readonly:true,require:true,align:'left'},
@@ -82,9 +83,36 @@
                        {field:'Remark',title:'备注',type:'string',width:150,edit:{type:''},align:'left'},
                        {field:'Company',title:'公司',type:'guid',bind:{ key:'Company',data:[]},width:110,align:'left'}],
                     sortName: 'PaymentId',
-                    key: 'PaymentId'
-                                            });
-            const details = ref([]);
+                    key: 'PaymentId',
+                    buttons:[],
+                    delKeys:[],
+                    detail:null
+                                            },                    { 
+                    cnName: '电费明细',
+                    table: 'RMS_ElectricityBillDetails',
+                    columns: [{field:'Id',title:'Id',type:'long',width:110,hidden:true,readonly:true,require:true,align:'left'},
+                       {field:'OwnerId',title:'OwnerId',type:'int',width:110,hidden:true,require:true,align:'left'},
+                       {field:'OwnerName',title:'业主名称',type:'string',width:120,align:'left'},
+                       {field:'ElectricityUnitPrice',title:'电费单价',type:'decimal',width:110,align:'left'},
+                       {field:'ChargeDegree',title:'充电度数',type:'decimal',width:110,align:'left'},
+                       {field:'ActualAmount',title:'实付金额',type:'decimal',width:110,align:'left'},
+                       {field:'PaymentDate',title:'付款日期',type:'datetime',width:110,align:'left'},
+                       {field:'InvoiceDate',title:'开票日期',type:'datetime',width:110,align:'left'},
+                       {field:'InvoiceNo',title:'发票号码',type:'string',width:120,align:'left'},
+                       {field:'InvoiceAmount',title:'开票金额',type:'decimal',width:110,align:'left'},
+                       {field:'Remark',title:'备注',type:'string',width:150,align:'left'},
+                       {field:'CreateID',title:'CreateID',type:'int',width:80,hidden:true,align:'left'},
+                       {field:'Creator',title:'Creator',type:'string',width:100,hidden:true,align:'left'},
+                       {field:'CreateDate',title:'CreateDate',type:'datetime',width:110,hidden:true,align:'left'},
+                       {field:'ModifyID',title:'ModifyID',type:'int',width:80,hidden:true,align:'left'},
+                       {field:'Modifier',title:'Modifier',type:'string',width:100,hidden:true,align:'left'},
+                       {field:'ModifyDate',title:'ModifyDate',type:'datetime',width:110,hidden:true,align:'left'}],
+                    sortName: 'OwnerName',
+                    key: 'Id',
+                    buttons:[],
+                    delKeys:[],
+                    detail:null
+                                            }]);
             return {
                 table,
                 extend,
