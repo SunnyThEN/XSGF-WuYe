@@ -75,6 +75,83 @@ function isPaymentRootRow(row) {
   return p === null || p === undefined || p === '' || Number(p) === 0
 }
 
+/** 是否已超过付款截止日期 */
+function isPaymentDeadlinePassed(row, nowMs = Date.now()) {
+  if (!row || !row.PaymentDeadline) return false
+  const deadlineMs = new Date(row.PaymentDeadline).getTime()
+  return !Number.isNaN(deadlineMs) && deadlineMs < nowMs
+}
+
+/** 带子节点的付款主项：以下列 = 一级子项对应列之和 */
+const PAYMENT_CHILD_SUM_FIELDS = [
+  'DiscountAmount',
+  'ActualLeaseAmount',
+  'ActualManageAmount'
+]
+
+/** 汇总行刷新时需要更新的列 */
+const PAYMENT_SUMMARY_FIELDS = [
+  'ActualAmount',
+  'DiscountAmount',
+  'ActualLeaseAmount',
+  'ActualManageAmount',
+  'ArrearsAmount'
+]
+
+/** 编辑后触发整表重算的列 */
+const PAYMENT_RECALC_TRIGGER_FIELDS = [
+  ...PAYMENT_CHILD_SUM_FIELDS,
+  'DueAmount',
+  'PaymentDeadline'
+]
+
+function toPaymentNumber(v) {
+  if (v === '' || v === null || v === undefined) return 0
+  const n = Number(v)
+  return isNaN(n) ? 0 : n
+}
+
+/** 实收金额 = 实收租金 + 实收管理费（两者均未填时保持为空） */
+function recalcPaymentRowActualAmount(row) {
+  if (!row) return
+  const lease = row.ActualLeaseAmount
+  const manage = row.ActualManageAmount
+  const hasLease = lease !== '' && lease != null && lease !== undefined
+  const hasManage = manage !== '' && manage != null && manage !== undefined
+  if (!hasLease && !hasManage) {
+    row.ActualAmount = undefined
+    return
+  }
+  row.ActualAmount = Number((toPaymentNumber(lease) + toPaymentNumber(manage)).toFixed(2))
+}
+
+/** 欠缴金额 = 应收金额 - 实收金额（仅根行；且须已超过付款截止日期） */
+function recalcPaymentRowArrearsAmount(row) {
+  if (!row) return
+  if (!isPaymentRootRow(row)) {
+    row.ArrearsAmount = undefined
+    return
+  }
+  if (!isPaymentDeadlinePassed(row)) {
+    row.ArrearsAmount = undefined
+    return
+  }
+  const due = row.DueAmount
+  const actual = row.ActualAmount
+  const hasDue = due !== '' && due != null && due !== undefined
+  const hasActual = actual !== '' && actual != null && actual !== undefined
+  if (!hasDue && !hasActual) {
+    row.ArrearsAmount = undefined
+    return
+  }
+  row.ArrearsAmount = Number((toPaymentNumber(due) - toPaymentNumber(actual)).toFixed(2))
+}
+
+function recalcPaymentRowDerivedAmounts(row) {
+  recalcPaymentRowActualAmount(row)
+  recalcPaymentRowArrearsAmount(row)
+}
+
 function buildPaymentChildRowFromParent(parent) {
   const skip = new Set([
     'PaymentId',
@@ -82,6 +159,11 @@ function buildPaymentChildRowFromParent(parent) {
     'DiscountAmount',
     'DueAmount',
     'PaymentDeadline',
+    'DueLeaseAmount',
+    'DueManageAmout',
+    'ActualLeaseAmount',
+    'ActualManageAmount',
+    'ArrearsAmount',
     'children',
     'elementIndex',
     'hasChildren'
@@ -94,6 +176,9 @@ function buildPaymentChildRowFromParent(parent) {
   child.ParentId = parent.PaymentId
   child.ActualAmount = undefined
   child.DiscountAmount = undefined
+  child.ActualLeaseAmount = undefined
+  child.ActualManageAmount = undefined
+  child.ArrearsAmount = undefined
   return child
 }
 
@@ -120,8 +205,12 @@ function recalcAllPaymentParentsWithChildren(nodes) {
   nodes.forEach((node) => {
     if (node.children && node.children.length) {
       recalcAllPaymentParentsWithChildren(node.children)
-      sumChildrenFieldIntoParent(node, 'ActualAmount')
-      sumChildrenFieldIntoParent(node, 'DiscountAmount')
+      PAYMENT_CHILD_SUM_FIELDS.forEach((field) => {
+        sumChildrenFieldIntoParent(node, field)
+      })
+      recalcPaymentRowDerivedAmounts(node)
+    } else {
+      recalcPaymentRowDerivedAmounts(node)
     }
   })
 }
@@ -147,15 +236,23 @@ let extension = {
       this.setFiexdSearchForm(true);
       this.details[0].single = true
       this.multiple.horizontal = true;
+      this.labelWidth = 100;
       const d0 = this.details[0]
       if (d0) {
         applyVolTableTree(d0, 'OwnerId')
         if (d0.detail) applyVolTableTree(d0.detail, 'PaymentId')
+        const payCols = d0.detail?.columns
+        if (payCols) {
+          ;['ActualAmount', 'ArrearsAmount'].forEach((field) => {
+            const col = payCols.find((c) => c.field === field)
+            if (col) col.edit = null
+          })
+        }
       }
       this.bindPaymentActualAmountRollup()
     },
     onInited() {
-      this.height = this.height - this.height * localStorage.getItem('proportion') * 1.2;
+      this.height = this.height - this.height * localStorage.getItem('proportion') ;
       this.summary = true;
       this.detailHeight = 400;
      
@@ -292,14 +389,14 @@ let extension = {
       return true
     },
 
-    /** 重算所有带子节点的付款行：主项实收/优惠金额 = 对应子项之和 */
+    /** 重算付款明细：子项汇总实收租金/管理费；仅根行计算欠缴（应收-实收） */
     recalcPaymentParentActualAmounts() {
       const sub = this.getTable('RMS_PaymentDetails')
       if (!sub || !Array.isArray(sub.rowData)) return
       recalcAllPaymentParentsWithChildren(sub.rowData)
       const cols = this.details[0]?.detail?.columns
       if (!cols || !sub.updateSummary) return
-      ;['ActualAmount', 'DiscountAmount'].forEach((field) => {
+      PAYMENT_SUMMARY_FIELDS.forEach((field) => {
         const col = cols.find((c) => c.field === field)
         if (col && col.summary) {
           sub.updateSummary(field)
@@ -307,13 +404,13 @@ let extension = {
       })
     },
 
-    /** 子项实收、优惠金额编辑时实时汇总到主项（onKeyPress + endEditAfter） */
+    /** 子项实收租金、实收管理费、优惠金额、应收金额编辑时实时汇总到主项（onKeyPress + endEditAfter） */
     bindPaymentActualAmountRollup() {
       const detail = this.details[0] && this.details[0].detail
       if (!detail || detail.table !== 'RMS_PaymentDetails' || detail._paymentActualRollupBound) return
       detail._paymentActualRollupBound = true
       const vm = this
-      ;['ActualAmount', 'DiscountAmount'].forEach((field) => {
+      PAYMENT_RECALC_TRIGGER_FIELDS.forEach((field) => {
         const col = detail.columns.find((c) => c.field === field)
         if (!col) return
         const prevKey = col.onKeyPress

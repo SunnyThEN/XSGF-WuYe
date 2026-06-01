@@ -39,7 +39,7 @@
                   </div>
                   <div class="stat-info">
                     <div class="stat-number">{{ formatMoney(overdueAmount) }}元</div>
-                    <div class="stat-label">逾期金额</div>
+                    <div class="stat-label">欠缴金额</div>
                   </div>
                 </div>
               </el-card>
@@ -117,7 +117,10 @@
           <template #header>
             <div class="card-header">
               <span>逾期付款提醒</span>
-              <el-button type="text" size="small" @click="goToPaymentDetails">查看全部</el-button>
+              <div class="card-header-actions">
+                <el-button type="text" size="small" @click="exportOverduePaymentsToExcel">导出Excel</el-button>
+                <el-button type="text" size="small" @click="goToPaymentDetails">查看全部</el-button>
+              </div>
             </div>
           </template>
           <el-table :data="overduePayments" style="width: 100%" :max-height="300">
@@ -128,9 +131,9 @@
                 {{ scope.row.paymentStartDate }} ~ {{ scope.row.paymentEndDate }}
               </template>
             </el-table-column>
-            <el-table-column prop="netReceivable" label="净应收" >
+            <el-table-column prop="dueAmount" label="应收金额" >
               <template #default="scope">
-                {{ formatMoney(scope.row.netReceivable) }}元
+                {{ formatMoney(scope.row.dueAmount) }}元
               </template>
             </el-table-column>
             <el-table-column prop="actualAmount" label="实收金额" >
@@ -145,9 +148,9 @@
                 </el-tag>
               </template>
             </el-table-column>
-            <el-table-column prop="overdueAmount" label="逾期金额">
+            <el-table-column prop="arrearsAmount" label="欠缴金额">
               <template #default="scope">
-                <span class="overdue-amount">{{ formatMoney(scope.row.overdueAmount) }}元</span>
+                <span class="overdue-amount">{{ formatMoney(scope.row.arrearsAmount) }}元</span>
               </template>
             </el-table-column>
           </el-table>
@@ -195,6 +198,7 @@
 <script>
 import { defineComponent } from 'vue';
 import * as echarts from 'echarts';
+import * as XLSX from 'xlsx';
 
 /** 付款主行（分期子行不参与首页逾期统计） */
 function isPaymentMainRowForDashboard(item) {
@@ -202,23 +206,34 @@ function isPaymentMainRowForDashboard(item) {
   return p === null || p === undefined || p === '' || Number(p) === 0;
 }
 
-/** 真正应收 = 应收金额 - 优惠金额 */
-function getPaymentNetReceivableForDashboard(item) {
-  const due = Number(item.DueAmount) || 0;
-  const discount = Number(item.DiscountAmount) || 0;
-  return Math.max(0, due - discount);
+/** 是否已超过付款截止日期（与付款明细页一致） */
+function isPaymentDeadlinePassedForDashboard(item, nowMs = Date.now()) {
+  if (!item || !item.PaymentDeadline) return false;
+  const deadlineMs = new Date(item.PaymentDeadline).getTime();
+  return !Number.isNaN(deadlineMs) && deadlineMs < nowMs;
 }
 
-/** 与付款明细页一致：已过付款截止日且未收齐（按净应收） */
+/** 欠缴金额 = 应收金额 - 实收金额（仅主行且已过付款截止日；优先用库中 ArrearsAmount） */
+function getPaymentArrearsAmountForDashboard(item, nowMs = Date.now()) {
+  if (!isPaymentMainRowForDashboard(item) || !isPaymentDeadlinePassedForDashboard(item, nowMs)) {
+    return 0;
+  }
+  const saved = item.ArrearsAmount;
+  if (saved !== '' && saved != null && saved !== undefined) {
+    const n = Number(saved);
+    if (!Number.isNaN(n)) return roundMoney2(Math.max(0, n));
+  }
+  const due = Number(item.DueAmount) || 0;
+  const actual =
+    item.ActualAmount == null || item.ActualAmount === ''
+      ? 0
+      : Number(item.ActualAmount) || 0;
+  return roundMoney2(Math.max(0, due - actual));
+}
+
+/** 与付款明细页「是否欠缴」一致：主行、已过截止日、欠缴金额 > 0 */
 function isOverdueUnpaidPaymentItem(item, nowMs) {
-  if (!isPaymentMainRowForDashboard(item)) return false;
-  if (!item.PaymentDeadline) return false;
-  const deadline = new Date(item.PaymentDeadline).getTime();
-  if (Number.isNaN(deadline) || deadline >= nowMs) return false;
-  const net = getPaymentNetReceivableForDashboard(item);
-  const actual = item.ActualAmount;
-  if (actual == null) return true;
-  return Number(actual) < net;
+  return getPaymentArrearsAmountForDashboard(item, nowMs) > 0;
 }
 
 /** 金额四舍五入到分（数字，用于汇总） */
@@ -231,6 +246,24 @@ function roundMoney2(value) {
 /** 金额四舍五入保留两位小数（展示字符串） */
 function formatMoney2(value) {
   return roundMoney2(value).toFixed(2);
+}
+
+/** 导出为真实 .xlsx 文件 */
+function downloadAoaAsXlsx(fileName, sheetName, headers, rows) {
+  const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+  ws['!cols'] = [
+    { wch: 18 },
+    { wch: 12 },
+    { wch: 14 },
+    { wch: 14 },
+    { wch: 12 },
+    { wch: 12 },
+    { wch: 10 },
+    { wch: 12 }
+  ];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, sheetName);
+  XLSX.writeFile(wb, fileName);
 }
 
 export default defineComponent({
@@ -285,6 +318,7 @@ export default defineComponent({
         this.paymentData = response.rows;
         this.calculateIncomeData();
         this.updateOverduePayments();
+        this.updatePieChart();
       } catch (error) {
         // 获取付款数据失败
       }
@@ -356,7 +390,7 @@ export default defineComponent({
           .reduce((sum, item) => sum + (Number(item.ActualAmount) || 0), 0)
       );
 
-      // 计算逾期金额（按付款截止日期、净应收、仅主行）
+      // 计算逾期金额（与付款明细欠缴一致：主行、已过截止日、应收-实收）
       const nowMs = now.getTime();
       this.overdueAmount = roundMoney2(
         this.paymentData
@@ -367,18 +401,12 @@ export default defineComponent({
             }
             return true;
           })
-          .reduce((sum, item) => {
-            const net = getPaymentNetReceivableForDashboard(item);
-            const actualAmount =
-              item.ActualAmount == null || item.ActualAmount === ''
-                ? 0
-                : Number(item.ActualAmount) || 0;
-            return sum + Math.max(0, net - actualAmount);
-          }, 0)
+          .reduce((sum, item) => sum + getPaymentArrearsAmountForDashboard(item, nowMs), 0)
       );
 
       // 计算同比增长
       this.calculateYearOverYearGrowth();
+      this.updatePieChart();
     },
 
     // 计算同比增长
@@ -470,32 +498,35 @@ export default defineComponent({
         .slice(0, 10); // 只显示前10条
     },
 
-    // 更新逾期付款列表（按付款截止日、净应收、仅主行）
-    updateOverduePayments() {
-      if (!this.paymentData) return;
+    /** 构建逾期付款行（与列表展示口径一致，导出含全部匹配记录） */
+    buildOverduePaymentRows() {
+      if (!this.paymentData) return [];
 
-      const now = new Date();
-      const nowMs = now.getTime();
+      const nowMs = Date.now();
       let filteredData = this.paymentData.filter((item) =>
         isOverdueUnpaidPaymentItem(item, nowMs)
       );
 
-      // 如果选择了特定公司，则过滤数据
       if (this.selectedCompany && this.selectedCompany !== 'all') {
         const targetCompanyIds = this.getCompanyAndChildrenIds(this.selectedCompany);
-        filteredData = filteredData.filter(item => targetCompanyIds.includes(item.Company));
+        filteredData = filteredData.filter((item) =>
+          targetCompanyIds.includes(item.Company)
+        );
       }
 
-      this.overduePayments = filteredData
-        .map(item => {
+      return filteredData
+        .map((item) => {
           const deadline = new Date(item.PaymentDeadline);
-          const overdueDays = Math.ceil((nowMs - deadline.getTime()) / (1000 * 60 * 60 * 24));
-          const netReceivable = roundMoney2(getPaymentNetReceivableForDashboard(item));
+          const overdueDays = Math.ceil(
+            (nowMs - deadline.getTime()) / (1000 * 60 * 60 * 24)
+          );
+          const dueAmount = roundMoney2(Number(item.DueAmount) || 0);
           const actualAmount = roundMoney2(
             item.ActualAmount == null || item.ActualAmount === ''
               ? 0
               : Number(item.ActualAmount) || 0
           );
+          const arrearsAmount = getPaymentArrearsAmountForDashboard(item, nowMs);
 
           return {
             ownerName: item.OwnerName || '未知商户',
@@ -505,16 +536,56 @@ export default defineComponent({
             paymentStartDate: item.PaymentStartDate
               ? item.PaymentStartDate.split(' ')[0]
               : '',
-            paymentEndDate: item.PaymentEndDate ? item.PaymentEndDate.split(' ')[0] : '',
-            dueAmount: roundMoney2(Number(item.DueAmount) || 0),
-            netReceivable,
+            paymentEndDate: item.PaymentEndDate
+              ? item.PaymentEndDate.split(' ')[0]
+              : '',
+            dueAmount,
             actualAmount,
-            overdueDays: overdueDays,
-            overdueAmount: roundMoney2(Math.max(0, netReceivable - actualAmount))
+            overdueDays,
+            arrearsAmount
           };
         })
-        .sort((a, b) => b.overdueDays - a.overdueDays)
-        .slice(0, 10); // 只显示前10条
+        .sort((a, b) => b.overdueDays - a.overdueDays);
+    },
+
+    // 更新逾期付款列表（首页表格仅展示前 10 条）
+    updateOverduePayments() {
+      const rows = this.buildOverduePaymentRows();
+      this.overduePayments = rows.slice(0, 10);
+    },
+
+    /** 导出逾期付款提醒为 Excel */
+    exportOverduePaymentsToExcel() {
+      const rows = this.buildOverduePaymentRows();
+      if (!rows.length) {
+        this.$message.warning('暂无逾期付款数据可导出');
+        return;
+      }
+      const headers = [
+        '商户名称',
+        '付款截止日',
+        '租赁付款期间起',
+        '租赁付款期间止',
+        '应收金额',
+        '实收金额',
+        '逾期天数',
+        '欠缴金额'
+      ];
+      const dataRows = rows.map((r) => [
+        r.ownerName,
+        r.paymentDeadline,
+        r.paymentStartDate,
+        r.paymentEndDate,
+        r.dueAmount,
+        r.actualAmount,
+        r.overdueDays,
+        r.arrearsAmount
+      ]);
+      const d = new Date();
+      const pad = (n) => String(n).padStart(2, '0');
+      const fileName = `逾期付款提醒_${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}.xlsx`;
+      downloadAoaAsXlsx(fileName, '逾期付款提醒', headers, dataRows);
+      this.$message.success('导出成功');
     },
 
     // 初始化图表
@@ -564,6 +635,7 @@ export default defineComponent({
       
       const monthlyData = this.calculateMonthlyIncomeData();
       this.updateIncomeChartOption(monthlyData);
+      this.updatePieChart();
     },
 
     // 更新收入图表配置
@@ -642,6 +714,19 @@ export default defineComponent({
             }
           }
         ]
+      });
+    },
+
+    // 刷新收入构成饼图
+    updatePieChart() {
+      if (!this.paymentData || !this.$refs.pieChart) return;
+      const pieData = this.calculatePieChartData();
+      if (!this.pieChart) {
+        this.initPieChart();
+        return;
+      }
+      this.pieChart.setOption({
+        series: [{ data: pieData }]
       });
     },
 
@@ -743,43 +828,70 @@ export default defineComponent({
       };
     },
 
-    // 计算饼图数据
+    /** 字典中所有顶级公司 ID（用于饼图固定展示项） */
+    getRootCompanyIds() {
+      if (!this.companyData) return [];
+      const companyItem = this.companyData.find((item) => item.dicNo === 'Company');
+      if (!companyItem || !companyItem.data) return [];
+      return companyItem.data.filter((c) => !c.parentId).map((c) => c.key);
+    },
+
+    /** 饼图要展示的顶级公司：全部公司时列出所有顶级；筛选时只展示所选体系顶级 */
+    getPieRootCompanyIds() {
+      const allRoots = this.getRootCompanyIds();
+      if (!this.selectedCompany || this.selectedCompany === 'all') {
+        return allRoots;
+      }
+      const topId = this.getTopCompanyId(this.selectedCompany);
+      return topId ? [topId] : allRoots;
+    },
+
+    // 计算饼图数据（固定展示顶级公司，无本月收入显示 0；仅统计付款主行）
     calculatePieChartData() {
       const now = new Date();
       const currentYear = now.getFullYear();
       const currentMonth = now.getMonth();
 
-      // 按顶级公司统计本月收入（子公司的收入汇入上级公司）
+      let targetCompanyIds = null;
+      if (this.selectedCompany && this.selectedCompany !== 'all') {
+        targetCompanyIds = this.getCompanyAndChildrenIds(this.selectedCompany);
+      }
+
+      const rootIds = this.getPieRootCompanyIds();
       const topCompanyIncome = {};
-      
-      this.paymentData.forEach(item => {
-        if (!item.PaymentDate || !item.ActualAmount) return;
-        
-        const paymentDate = new Date(item.PaymentDate);
-        if (paymentDate.getFullYear() === currentYear && 
-            paymentDate.getMonth() === currentMonth) {
-          
-          const companyId = item.Company;
-          const amount = Number(item.ActualAmount) || 0;
-          
-          // 获取顶级公司ID
-          const topCompanyId = this.getTopCompanyId(companyId);
-          
-          if (!topCompanyIncome[topCompanyId]) {
-            topCompanyIncome[topCompanyId] = 0;
-          }
-          topCompanyIncome[topCompanyId] += amount;
-        }
+      rootIds.forEach((id) => {
+        topCompanyIncome[id] = 0;
       });
 
-      // 转换为饼图数据格式，只显示顶级公司
-      return Object.entries(topCompanyIncome)
-        .map(([companyId, value]) => {
-          const companyName = this.getCompanyName(companyId);
-          return { name: companyName, value: roundMoney2(value) };
-        })
-        .sort((a, b) => b.value - a.value)
-        .slice(0, 6); // 显示前6个顶级公司
+      this.paymentData.forEach((item) => {
+        if (!isPaymentMainRowForDashboard(item)) return;
+        if (!item.PaymentDate || !item.ActualAmount) return;
+        if (targetCompanyIds && !targetCompanyIds.includes(item.Company)) return;
+
+        const paymentDate = new Date(item.PaymentDate);
+        if (
+          paymentDate.getFullYear() !== currentYear ||
+          paymentDate.getMonth() !== currentMonth
+        ) {
+          return;
+        }
+
+        const topCompanyId = this.getTopCompanyId(item.Company);
+        if (topCompanyIncome[topCompanyId] === undefined) {
+          topCompanyIncome[topCompanyId] = 0;
+        }
+        topCompanyIncome[topCompanyId] += Number(item.ActualAmount) || 0;
+      });
+
+      const orderedIds =
+        rootIds.length > 0 ? rootIds : Object.keys(topCompanyIncome);
+
+      return orderedIds
+        .map((companyId) => ({
+          name: this.getCompanyName(companyId),
+          value: roundMoney2(topCompanyIncome[companyId] || 0)
+        }))
+        .sort((a, b) => b.value - a.value);
     },
 
     // 根据公司ID获取公司名称
@@ -1166,6 +1278,12 @@ export default defineComponent({
       color: #1e293b;
       font-weight: 600;
       font-size: 16px;
+    }
+
+    .card-header-actions {
+      display: flex;
+      align-items: center;
+      gap: 4px;
     }
 
     .overdue-amount {

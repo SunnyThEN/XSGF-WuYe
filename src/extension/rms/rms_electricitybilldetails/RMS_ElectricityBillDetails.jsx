@@ -4,11 +4,11 @@
 **  框架文档： http://doc.volcore.xyz/
 *****************************************************************************************/
 //此js文件是用来自定义扩展业务代码，可以扩展一些自定义页面或者重新配置生成的代码
-
+import gridHeader from "@/views/rms/rms_ownerdetails/RMS_OwnerDetails.vue"
 let extension = {
   components: {
     //查询界面扩展组件
-    gridHeader: '',
+    gridHeader: gridHeader,
     gridBody: '',
     gridFooter: '',
     //新建、编辑弹出框扩展组件
@@ -22,26 +22,25 @@ let extension = {
   methods: {
      //下面这些方法可以保留也可以删除
     onInit() {  //框架初始化配置前，
-        //示例：在按钮的最前面添加一个按钮
-        //   this.buttons.unshift({  //也可以用push或者splice方法来修改buttons数组
-        //     name: '按钮', //按钮名称
-        //     icon: 'el-icon-document', //按钮图标：https://element.eleme.cn/#/zh-CN/component/icon
-        //     type: 'primary', //按钮样式:https://element-plus.gitee.io/zh-CN/component/button.html
-        //     //color:"#eee",//自定义按钮颜色
-        //     onClick: function () {
-        //       this.$Message.success('点击了按钮');
-        //     }
-        //   });
-
-        //示例：设置修改新建、编辑弹出框字段标签的长度
-        // this.boxOptions.labelWidth = 150;
+      this.setFiexdSearchForm(true);
+      this.labelWidth = 100;
     },
     onInited() {
-      //框架初始化配置后
-      //如果要配置明细表,在此方法操作
-      //this.detailOptions.columns.forEach(column=>{ });
+      this.height = this.height - this.height * localStorage.getItem('proportion')*3 - 180;
     },
     searchBefore(param) {
+      
+      if (this.$store.getters.data().search == 'click') {
+        if (this.$route.path.includes('RMS_ElectricityBillDetails')) {
+          if (this.$refs.gridHeader.$refs.grid.$refs.table.getSelected().length) {
+            param.wheres = [
+              { name: 'OwnerId', value: this.$refs.gridHeader.$refs.grid.$refs.table.getSelected()[0].OwnerId },
+            ];
+            return true
+          }
+          this.$message.error('请选择商户')
+        }
+      }
       //界面查询前,可以给param.wheres添加查询参数
       //返回false，则不会执行查询
       return true;
@@ -63,6 +62,16 @@ let extension = {
       // this.$refs.table.$refs.table.toggleRowSelection(row); //单击行时选中当前行;
     },
     modelOpenAfter(row) {
+      if(this.currentAction=='Add'){
+        const selected = this.$refs.gridHeader.$refs.grid.$refs.table.getSelected()[0];
+        if(selected){
+          this.editFormFields.OwnerId = selected.OwnerId;
+          this.editFormFields.OwnerName = selected.OwnerName;
+        }else{
+          this.boxModel = false;
+          this.$message.error('请选择商户')
+        }
+      }
       //点击编辑、新建按钮弹出框后，可以在此处写逻辑，如，从后台获取数据
       //(1)判断是编辑还是新建操作： this.currentAction=='Add';
       //(2)给弹出框设置默认值

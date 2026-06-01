@@ -12,6 +12,57 @@ function getNetReceivable(row) {
   return Math.max(0, due - discount);
 }
 
+/** 付款明细树：根行（仅根行有欠缴金额） */
+function isPaymentRootRow(row) {
+  const p = row.ParentId;
+  return p == null || p === '' || p === 0;
+}
+
+/** 是否已超过付款截止日期 */
+function isPaymentDeadlinePassed(row, nowMs = Date.now()) {
+  if (!row || !row.PaymentDeadline) return false;
+  const deadlineMs = new Date(row.PaymentDeadline).getTime();
+  return !Number.isNaN(deadlineMs) && deadlineMs < nowMs;
+}
+
+function formatQueryNow() {
+  const d = new Date();
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+}
+
+/** 是否欠缴：欠缴金额 > 0 且已超过付款截止日期（仅根行） */
+function isPaymentRowInArrears(row, nowMs = Date.now()) {
+  if (!isPaymentRootRow(row) || !isPaymentDeadlinePassed(row, nowMs)) return false;
+  const v = row.ArrearsAmount;
+  if (v === '' || v == null || v === undefined) return false;
+  const n = Number(v);
+  return !isNaN(n) && n > 0;
+}
+
+/** 按是否欠缴筛选树形/扁平结果（仅根行判断欠缴，保留匹配根行及其子项） */
+function filterPaymentResultByIsArrears(rows, isArrears, nowMs = Date.now()) {
+  if (!rows || !rows.length || isArrears === '' || isArrears == null || isArrears === undefined) {
+    return rows;
+  }
+  const wantArrears = isArrears === '1' || isArrears === 1;
+  const matchedRootIds = new Set();
+  rows.forEach((row) => {
+    if (!isPaymentRootRow(row)) return;
+    const inArrears = isPaymentRowInArrears(row, nowMs);
+    if (wantArrears ? inArrears : !inArrears) {
+      matchedRootIds.add(row.PaymentId);
+    }
+  });
+  return rows.filter((row) => {
+    if (isPaymentRootRow(row)) {
+      return matchedRootIds.has(row.PaymentId);
+    }
+    const pid = row.ParentId;
+    return pid != null && matchedRootIds.has(pid);
+  });
+}
+
 let extension = {
   components: {
     //查询界面扩展组件
@@ -31,6 +82,20 @@ let extension = {
     onInit() {  //框架初始化配置前，
       this.setFiexdSearchForm(true);
       this.columnIndex = true;
+      this.labelWidth = 120;
+      this.searchFormFields.IsArrears = '';
+      const isArrearsSearch = {
+        dataKey: 'enable',
+        data: [],
+        title: '是否欠缴',
+        field: 'IsArrears',
+        type: 'select'
+      };
+      if (this.searchFormOptions && this.searchFormOptions.length) {
+        this.searchFormOptions[0].push(isArrearsSearch);
+      } else {
+        this.searchFormOptions = [[isArrearsSearch]];
+      }
       this.lazy = false;
       this.rowKey = this.table.key || 'PaymentId';
       this.rowParentField = 'ParentId';
@@ -81,14 +146,35 @@ let extension = {
       })
     },
     onInited() {
-      this.height = this.height - this.height * localStorage.getItem('proportion') * 0.5;
+      this.height = this.height - this.height * localStorage.getItem('proportion') * 0.5-30;
     },
     searchBefore(param) {
-      //界面查询前,可以给param.wheres添加查询参数
-      //返回false，则不会执行查询
+      if (!param.wheres) param.wheres = [];
+      const isArrears = this.searchFormFields.IsArrears;
+      param.wheres = param.wheres.filter((w) => w.name !== 'IsArrears');
+      if (isArrears === '1' || isArrears === 1) {
+        param.wheres.push(
+          {
+            name: 'ArrearsAmount',
+            value: '0',
+            displayType: 'gt'
+          },
+          {
+            name: 'PaymentDeadline',
+            value: formatQueryNow(),
+            displayType: 'lt'
+          }
+        );
+      }
       return true;
     },
     searchAfter(result) {
+      const isArrears = this.searchFormFields.IsArrears;
+      if (result && (isArrears === '1' || isArrears === 1 || isArrears === '0' || isArrears === 0)) {
+        const filtered = filterPaymentResultByIsArrears(result, isArrears);
+        result.length = 0;
+        result.push(...filtered);
+      }
       // 对结果进行排序，将符合条件的行靠前排
       if (result) {
         const now = Date.now();

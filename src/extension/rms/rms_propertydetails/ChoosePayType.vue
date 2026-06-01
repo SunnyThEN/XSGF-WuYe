@@ -95,12 +95,19 @@ export default {
                     endDateStr = new Date(periodEnd.getTime() + 8*60*60*1000).toISOString().slice(0,10);
                 }
                 
+                const monthlyRent = Number(OwnerData.MonthlyRent) || 0;
+                const monthlyManageFee = Number(OwnerData.MonthlyManageFee) || 0;
+                const fmtDue = (v) => (Number(v) || 0).toFixed(2).replace(/\.00$/, '');
                 let _row = {
                     OwnerName: OwnerData.OwnerName,
                     Company: OwnerData.Company,
                     PaymentStartDate: startDateStr,
                     PaymentEndDate: endDateStr,
-                    DueAmount: ((OwnerData.MonthlyTotalFee || 0) * interval).toFixed(2).replace(/\.00$/, '')// 根据付款间隔计算应收金额
+                    DueAmount: fmtDue((OwnerData.MonthlyTotalFee != null && OwnerData.MonthlyTotalFee !== ''
+                        ? Number(OwnerData.MonthlyTotalFee)
+                        : monthlyRent + monthlyManageFee) * interval),
+                    DueLeaseAmount: fmtDue(monthlyRent * interval),
+                    DueManageAmout: fmtDue(monthlyManageFee * interval)
                 };
                 _this.addSubRow("RMS_PaymentDetails",_this.details[0].detail,'button',_row);
                 

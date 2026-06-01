@@ -54,7 +54,7 @@ app.config.globalProperties.$global = {
   },
   border: true,
   lang: false, //是否使用多语言
-  labelPosition: 'top', //表单(弹出框表单)标签显示位置,可选值，top、left，2023.07.04
+  labelPosition: 'left', //表单(弹出框表单)标签显示位置,可选值，top、left，2023.07.04
   db: false, //是否使用分库
   signalR: true, //是否开启signalR
   fixedSearch: false,//2024.07.21增加全局固定查询条件

@@ -33,7 +33,8 @@
     "vue-plugin-hiprint": "^0.0.56",
     "vue-router": "^4.1.6",
     "vuex": "^4.1.0",
-    "wangeditor": "^4.7.15"
+    "wangeditor": "^4.7.15",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@babel/eslint-parser": "^7.21.3",

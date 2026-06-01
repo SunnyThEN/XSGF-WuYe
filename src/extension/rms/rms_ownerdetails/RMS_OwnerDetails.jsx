@@ -39,6 +39,7 @@ let extension = {
     onInit() {  //框架初始化配置前，
       this.setFiexdSearchForm(true);
       this.columnIndex=true;
+      this.labelWidth = 100;
       const d = this.detail;
       if (d && d.table === 'RMS_PaymentDetails') {
         d.rowKey = d.rowKey || d.key || 'PaymentId';
@@ -49,7 +50,17 @@ let extension = {
       }
     },
     onInited() {
-      this.height = this.height - this.height * localStorage.getItem('proportion') /2;
+      if(this.$route.path.includes('RMS_OwnerDetails')){
+        this.height = this.height - this.height * localStorage.getItem('proportion') /2;
+      }else{
+        this.height = this.height - this.height * localStorage.getItem('proportion')*3 - 200;
+        this.buttons.forEach(x => {
+          if(x.name=='新建'||x.name=='编辑'){
+            x.hidden = true;
+          }
+        });
+      }
+    //  this.height = //this.height - this.height * localStorage.getItem('proportion') /2;
       this.summary = true;
       this.columns.forEach(x => {
         if (x.field == 'Rent'||x.field=='ManageFee'||x.field=='TotalFee') {
@@ -70,6 +81,7 @@ let extension = {
       return true;
     },
     addBefore(formData) {
+
       //新建保存前formData为对象，包括明细表，可以给给表单设置值，自己输出看formData的值
       return true;
     },
@@ -78,10 +90,18 @@ let extension = {
       return true;
     },
     rowClick({ row, column, event }) {
-      //查询界面点击行事件
-      // this.$refs.table.$refs.table.toggleRowSelection(row); //单击行时选中当前行;
+      this.$refs.table.$refs.table.clearSelection();
+      //设置选中当前行
+      this.$refs.table.$refs.table.toggleRowSelection(row, true);
+      if(!this.$route.path.includes('RMS_OwnerDetails')){
+        //console.log(this);
+        this.$store.getters.data().search = 'click'
+        this.$parent.$parent.search(row)
+       // this.$refs.gridFooter.$refs.grid.search(row)
+      }
     },
     modelOpenAfter(row) {
+   
       //点击编辑、新建按钮弹出框后，可以在此处写逻辑，如，从后台获取数据
       //(1)判断是编辑还是新建操作： this.currentAction=='Add';
       //(2)给弹出框设置默认值
