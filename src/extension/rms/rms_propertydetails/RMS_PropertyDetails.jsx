@@ -5,6 +5,14 @@
 *****************************************************************************************/
 //此js文件是用来自定义扩展业务代码，可以扩展一些自定义页面或者重新配置生成的代码
 import ChoosePayType from './ChoosePayType.vue';
+import {
+  calcPaymentArrearsAmount,
+  getPaymentActualAmount,
+  getPaymentDueAmount,
+  hasSplitActualInput,
+  hasSplitDueInput,
+  syncPaymentTotalAmountFields
+} from '@/utils/paymentAmount';
 
 /** 树形明细需要 ParentId 列参与绑定/保存；生成器不维护时在此插入（避免改 views/rms 下 vue） */
 function ensureParentIdColumn(columns, insertAfterField) {
@@ -69,6 +77,49 @@ function refreshPaymentVolTable(subRef) {
   }
 }
 
+/** 将待删 PaymentId 记入持久集合，避免切换业主触发表格 load 时框架清空 delKeys */
+function trackPaymentDelKeys(vm, ids) {
+  if (!vm._pendingPaymentDelKeys) {
+    vm._pendingPaymentDelKeys = new Set()
+  }
+  const subDetail = vm.subDetails && vm.subDetails[0]
+  if (!subDetail) return
+  const list = Array.isArray(ids) ? ids : [ids]
+  list.forEach((id) => {
+    if (!id) return
+    vm._pendingPaymentDelKeys.add(id)
+    if (!subDetail.delKeys.includes(id)) {
+      subDetail.delKeys.push(id)
+    }
+  })
+}
+
+function restorePendingPaymentDelKeys(vm, item) {
+  if (!item || item.table !== 'RMS_PaymentDetails' || !vm._pendingPaymentDelKeys?.size) return
+  vm._pendingPaymentDelKeys.forEach((id) => {
+    if (!item.delKeys.includes(id)) {
+      item.delKeys.push(id)
+    }
+  })
+}
+
+function mergePendingPaymentDelKeysToForm(vm, formData) {
+  if (!vm._pendingPaymentDelKeys?.size) return
+  if (!formData.subDelInfo) {
+    formData.subDelInfo = []
+  }
+  let payInfo = formData.subDelInfo.find((x) => x.table === 'RMS_PaymentDetails')
+  if (!payInfo) {
+    payInfo = { table: 'RMS_PaymentDetails', delKeys: [] }
+    formData.subDelInfo.push(payInfo)
+  }
+  vm._pendingPaymentDelKeys.forEach((id) => {
+    if (!payInfo.delKeys.includes(id)) {
+      payInfo.delKeys.push(id)
+    }
+  })
+}
+
 /** 付款树：仅无 ParentId 的根行可挂一级子节点 */
 function isPaymentRootRow(row) {
   const p = row.ParentId
@@ -82,17 +133,21 @@ function isPaymentDeadlinePassed(row, nowMs = Date.now()) {
   return !Number.isNaN(deadlineMs) && deadlineMs < nowMs
 }
 
-/** 带子节点的付款主项：以下列 = 一级子项对应列之和 */
+/** 带子节点的付款主项：以下列 = 一级子项对应列之和（应收租金/管理费由主项自行维护，不参与汇总） */
 const PAYMENT_CHILD_SUM_FIELDS = [
   'DiscountAmount',
   'ActualLeaseAmount',
   'ActualManageAmount'
 ]
 
+/** 应收明细列：编辑后重算本行 DueAmount，但不从子项汇总到主项 */
+const PAYMENT_DUE_FIELDS = ['DueLeaseAmount', 'DueManageAmout']
+
 /** 汇总行刷新时需要更新的列 */
 const PAYMENT_SUMMARY_FIELDS = [
-  'ActualAmount',
   'DiscountAmount',
+  'DueLeaseAmount',
+  'DueManageAmout',
   'ActualLeaseAmount',
   'ActualManageAmount',
   'ArrearsAmount'
@@ -101,53 +156,34 @@ const PAYMENT_SUMMARY_FIELDS = [
 /** 编辑后触发整表重算的列 */
 const PAYMENT_RECALC_TRIGGER_FIELDS = [
   ...PAYMENT_CHILD_SUM_FIELDS,
-  'DueAmount',
+  ...PAYMENT_DUE_FIELDS,
   'PaymentDeadline'
 ]
 
-function toPaymentNumber(v) {
-  if (v === '' || v === null || v === undefined) return 0
-  const n = Number(v)
-  return isNaN(n) ? 0 : n
+/** 应收金额 = 应收租金 + 应收管理费（无拆分时回退库中 DueAmount） */
+function recalcPaymentRowDueAmount(row) {
+  if (!row || !hasSplitDueInput(row)) return
+  row.DueAmount = getPaymentDueAmount(row)
 }
 
-/** 实收金额 = 实收租金 + 实收管理费（两者均未填时保持为空） */
+/** 实收金额 = 实收租金 + 实收管理费（无拆分时回退库中 ActualAmount） */
 function recalcPaymentRowActualAmount(row) {
-  if (!row) return
-  const lease = row.ActualLeaseAmount
-  const manage = row.ActualManageAmount
-  const hasLease = lease !== '' && lease != null && lease !== undefined
-  const hasManage = manage !== '' && manage != null && manage !== undefined
-  if (!hasLease && !hasManage) {
-    row.ActualAmount = undefined
-    return
-  }
-  row.ActualAmount = Number((toPaymentNumber(lease) + toPaymentNumber(manage)).toFixed(2))
+  if (!row || !hasSplitActualInput(row)) return
+  row.ActualAmount = getPaymentActualAmount(row)
 }
 
-/** 欠缴金额 = 应收金额 - 实收金额（仅根行；且须已超过付款截止日期） */
+/** 欠缴金额 = (应收 - 优惠) - 实收（仅根行；且须已超过付款截止日期） */
 function recalcPaymentRowArrearsAmount(row) {
   if (!row) return
-  if (!isPaymentRootRow(row)) {
+  if (!isPaymentRootRow(row) || !isPaymentDeadlinePassed(row)) {
     row.ArrearsAmount = undefined
     return
   }
-  if (!isPaymentDeadlinePassed(row)) {
-    row.ArrearsAmount = undefined
-    return
-  }
-  const due = row.DueAmount
-  const actual = row.ActualAmount
-  const hasDue = due !== '' && due != null && due !== undefined
-  const hasActual = actual !== '' && actual != null && actual !== undefined
-  if (!hasDue && !hasActual) {
-    row.ArrearsAmount = undefined
-    return
-  }
-  row.ArrearsAmount = Number((toPaymentNumber(due) - toPaymentNumber(actual)).toFixed(2))
+  row.ArrearsAmount = calcPaymentArrearsAmount(row)
 }
 
 function recalcPaymentRowDerivedAmounts(row) {
+  recalcPaymentRowDueAmount(row)
   recalcPaymentRowActualAmount(row)
   recalcPaymentRowArrearsAmount(row)
 }
@@ -243,10 +279,15 @@ let extension = {
         if (d0.detail) applyVolTableTree(d0.detail, 'PaymentId')
         const payCols = d0.detail?.columns
         if (payCols) {
-          ;['ActualAmount', 'ArrearsAmount'].forEach((field) => {
+          ;['DueAmount', 'ActualAmount'].forEach((field) => {
             const col = payCols.find((c) => c.field === field)
-            if (col) col.edit = null
+            if (col) {
+              col.hidden = true
+              col.edit = null
+            }
           })
+          const arrearsCol = payCols.find((c) => c.field === 'ArrearsAmount')
+          if (arrearsCol) arrearsCol.edit = null
         }
       }
       this.bindPaymentActualAmountRollup()
@@ -356,6 +397,8 @@ let extension = {
       const ownerSel = this.getTable('RMS_OwnerDetails')?.getSelected?.()
       const sub = this.getTable('RMS_PaymentDetails')
       if (!ownerSel || !ownerSel[0] || !sub || !Array.isArray(sub.rowData)) return
+      this.recalcPaymentParentActualAmounts()
+      collectPaymentTreeRows(sub.rowData).forEach((row) => syncPaymentTotalAmountFields(row))
       ownerSel[0][payTable] = sub.rowData
     },
 
@@ -366,6 +409,7 @@ let extension = {
       if (addData.RentalStartTime && addData.RentalEndTime) {
         formData.mainData.RentalTime = (new Date(addData.RentalEndTime).getTime() - new Date(addData.RentalStartTime).getTime()) / (1000 * 60 * 60 * 24) + '天';
       }
+      mergePendingPaymentDelKeysToForm(this, formData)
       return true;
     },
     updateBefore(formData) {
@@ -374,6 +418,7 @@ let extension = {
       if (updateData.RentalStartTime && updateData.RentalEndTime) {
         formData.mainData.RentalTime = (new Date(updateData.RentalEndTime).getTime() - new Date(updateData.RentalStartTime).getTime()) / (1000 * 60 * 60 * 24) + '天';
       }
+      mergePendingPaymentDelKeysToForm(this, formData)
       return true;
     },
     rowClick({ row, column, event }) {
@@ -384,12 +429,13 @@ let extension = {
     /** 三级付款加载/刷新后，按子项重算主项实收、优惠金额 */
     searchSubDetailAfter(rows, table, item) {
       if (item && item.table === 'RMS_PaymentDetails') {
+        restorePendingPaymentDelKeys(this, item)
         this.$nextTick(() => this.recalcPaymentParentActualAmounts())
       }
       return true
     },
 
-    /** 重算付款明细：子项汇总实收租金/管理费；仅根行计算欠缴（应收-实收） */
+    /** 重算付款明细：子项汇总实收/优惠；主项应收自行维护；仅根行计算欠缴（应收-优惠-实收） */
     recalcPaymentParentActualAmounts() {
       const sub = this.getTable('RMS_PaymentDetails')
       if (!sub || !Array.isArray(sub.rowData)) return
@@ -404,7 +450,7 @@ let extension = {
       })
     },
 
-    /** 子项实收租金、实收管理费、优惠金额、应收金额编辑时实时汇总到主项（onKeyPress + endEditAfter） */
+    /** 子项实收租金、实收管理费、优惠金额编辑时实时汇总到主项；应收由主项自行维护（onKeyPress + endEditAfter） */
     bindPaymentActualAmountRollup() {
       const detail = this.details[0] && this.details[0].detail
       if (!detail || detail.table !== 'RMS_PaymentDetails' || detail._paymentActualRollupBound) return
@@ -513,6 +559,7 @@ let extension = {
 
     modelOpenAfter(row) {
       this.closePaymentContextMenu()
+      this._pendingPaymentDelKeys = new Set()
       this.bindPaymentActualAmountRollup()
       this.$nextTick(() => this.recalcPaymentParentActualAmounts())
       this.details[0].buttons.forEach(button => {
@@ -549,16 +596,19 @@ let extension = {
               tigger = true;
              
               let detail = this.details[0];
-              let subDetail = this.subDetails[0];
+              const ownerRow = _row[0];
+              const payTable = detail.detail?.table;
               this.getTable("RMS_OwnerDetails").delRow(_row);
-              detail.delKeys.push(_row[0].OwnerId);
+              detail.delKeys.push(ownerRow.OwnerId);
               let subDetailKeys = [];
               let subDetailDelRows = [];
-              const subDetailRowData = collectPaymentTreeRows(
-                this.getTable("RMS_PaymentDetails").rowData || []
-              );
+              const paymentRoots =
+                payTable && ownerRow[payTable]
+                  ? ownerRow[payTable]
+                  : this.getTable('RMS_PaymentDetails').rowData || [];
+              const subDetailRowData = collectPaymentTreeRows(paymentRoots);
               subDetailRowData.forEach((x) => {
-                if (x.OwnerId == _row[0].OwnerId) {
+                if (x.OwnerId == ownerRow.OwnerId) {
                   if (x.PaymentId) subDetailKeys.push(x.PaymentId);
                   subDetailDelRows.push(x);
                 }
@@ -566,7 +616,7 @@ let extension = {
               const subRef = this.getTable("RMS_PaymentDetails");
               subDetailDelRows.forEach((r) => removeSinglePaymentNodeFromTree(subRef.rowData, r));
               refreshPaymentVolTable(subRef);
-              subDetail.delKeys = subDetailKeys;
+              trackPaymentDelKeys(this, subDetailKeys);
             });
           }
         }
@@ -612,7 +662,6 @@ let extension = {
             }).then(() => {
               if (tigger) return;
               tigger = true;
-              const subDetail = this.subDetails[0];
               const toRemove = new Set();
               const addSubtree = (n) => {
                 toRemove.add(n);
@@ -624,7 +673,7 @@ let extension = {
                 if (r.PaymentId) idSet.add(r.PaymentId);
               });
               toRemove.forEach((r) => removeSinglePaymentNodeFromTree(subRef.rowData, r));
-              idSet.forEach((id) => subDetail.delKeys.push(id));
+              trackPaymentDelKeys(this, [...idSet]);
               refreshPaymentVolTable(subRef);
               this.recalcPaymentParentActualAmounts();
             });

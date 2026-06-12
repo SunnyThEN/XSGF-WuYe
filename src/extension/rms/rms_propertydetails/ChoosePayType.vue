@@ -103,9 +103,6 @@ export default {
                     Company: OwnerData.Company,
                     PaymentStartDate: startDateStr,
                     PaymentEndDate: endDateStr,
-                    DueAmount: fmtDue((OwnerData.MonthlyTotalFee != null && OwnerData.MonthlyTotalFee !== ''
-                        ? Number(OwnerData.MonthlyTotalFee)
-                        : monthlyRent + monthlyManageFee) * interval),
                     DueLeaseAmount: fmtDue(monthlyRent * interval),
                     DueManageAmout: fmtDue(monthlyManageFee * interval)
                 };

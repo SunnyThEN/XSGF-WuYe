@@ -4,13 +4,13 @@
 **  框架文档： http://doc.volcore.xyz/
 *****************************************************************************************/
 //此js文件是用来自定义扩展业务代码，可以扩展一些自定义页面或者重新配置生成的代码
-
-/** 真正应收 = 应收金额 - 优惠金额（不小于 0） */
-function getNetReceivable(row) {
-  const due = Number(row.DueAmount) || 0;
-  const discount = Number(row.DiscountAmount) || 0;
-  return Math.max(0, due - discount);
-}
+import {
+  calcPaymentArrearsAmount,
+  getNetReceivable,
+  getPaymentActualAmount,
+  hasPaymentActualInput,
+  syncPaymentTotalAmountFields
+} from '@/utils/paymentAmount';
 
 /** 付款明细树：根行（仅根行有欠缴金额） */
 function isPaymentRootRow(row) {
@@ -101,7 +101,14 @@ let extension = {
       this.rowParentField = 'ParentId';
       this.defaultExpandAll = false;
       this.columns.forEach(x => {
-        if (x.field == 'DueAmount' || x.field == 'ActualAmount' || x.field == 'PaymentDate' || x.field == 'PaymentStartDate') {
+        if (
+          x.field === 'DueLeaseAmount' ||
+          x.field === 'DueManageAmout' ||
+          x.field === 'ActualLeaseAmount' ||
+          x.field === 'ActualManageAmount' ||
+          x.field === 'PaymentDate' ||
+          x.field === 'PaymentStartDate'
+        ) {
           x.summary = true;
           x.summaryFormatter = (val, column, rows, summaryData) => {
             if (x.field == 'PaymentStartDate') {
@@ -113,6 +120,9 @@ let extension = {
               return val.toFixed(2).replace(/\.00$/, '');
             }
           };
+        }
+        if (x.field === 'DueAmount' || x.field === 'ActualAmount') {
+          x.hidden = true;
         }
 
         x.cellStyle = (row, rowIndex, columnIndex) => {
@@ -130,12 +140,13 @@ let extension = {
           }
           const now = Date.now();
           const netDue = getNetReceivable(row);
-          if (row.ActualAmount == null && deadlineMs < now) {
+          const actual = getPaymentActualAmount(row);
+          if (!hasPaymentActualInput(row) && deadlineMs < now) {
             return {
               background: '#FF8A65'
             };
           }
-          if (row.ActualAmount < netDue && deadlineMs < now) {
+          if (actual < netDue && deadlineMs < now) {
             return {
               background: '#FFEE58'
             };
@@ -169,6 +180,16 @@ let extension = {
       return true;
     },
     searchAfter(result) {
+      if (result && result.length) {
+        result.forEach((row) => {
+          syncPaymentTotalAmountFields(row);
+          if (!isPaymentRootRow(row) || !isPaymentDeadlinePassed(row)) {
+            row.ArrearsAmount = undefined;
+          } else {
+            row.ArrearsAmount = calcPaymentArrearsAmount(row);
+          }
+        });
+      }
       const isArrears = this.searchFormFields.IsArrears;
       if (result && (isArrears === '1' || isArrears === 1 || isArrears === '0' || isArrears === 0)) {
         const filtered = filterPaymentResultByIsArrears(result, isArrears);
@@ -190,9 +211,10 @@ let extension = {
             return false;
           }
           const netDue = getNetReceivable(row);
+          const actual = getPaymentActualAmount(row);
           return (
-            row.ActualAmount == null ||
-            row.ActualAmount < netDue
+            !hasPaymentActualInput(row) ||
+            actual < netDue
           );
         };
         result.sort((a, b) => {
@@ -207,11 +229,11 @@ let extension = {
       return true;
     },
     addBefore(formData) {
-      //新建保存前formData为对象，包括明细表，可以给给表单设置值，自己输出看formData的值
+      syncPaymentTotalAmountFields(formData.mainData);
       return true;
     },
     updateBefore(formData) {
-      //编辑保存前formData为对象，包括明细表、删除行的Id
+      syncPaymentTotalAmountFields(formData.mainData);
       return true;
     },
     rowClick({ row, column, event }) {

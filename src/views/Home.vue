@@ -1,195 +1,207 @@
 <template>
-  <div class="home-content">
+  <div class="mgmt-home">
     <el-scrollbar>
-      <div class="content-wrapper">
-        <!-- 数据概览卡片 -->
-        <div class="data-overview">
-          <el-row :gutter="20">
-            <el-col :span="6">
-              <el-card shadow="hover" class="stat-card">
-                <div class="stat-content">
-                  <div class="stat-icon">
-                    <i class="el-icon-office-building"></i>
-                  </div>
-                  <div class="stat-info">
-                    <div class="stat-number">{{ currentTenants }}</div>
-                    <div class="stat-label">当前租户数</div>
-                  </div>
-                </div>
-              </el-card>
-            </el-col>
-            <el-col :span="6">
-              <el-card shadow="hover" class="stat-card">
-                <div class="stat-content">
-                  <div class="stat-icon income">
-                    <i class="el-icon-money"></i>
-                  </div>
-                  <div class="stat-info">
-                    <div class="stat-number">{{ formatMoney(currentMonthIncome) }}元</div>
-                    <div class="stat-label">本月收入</div>
-                  </div>
-                </div>
-              </el-card>
-            </el-col>
-            <el-col :span="6">
-              <el-card shadow="hover" class="stat-card">
-                <div class="stat-content">
-                  <div class="stat-icon overdue">
-                    <i class="el-icon-warning"></i>
-                  </div>
-                  <div class="stat-info">
-                    <div class="stat-number">{{ formatMoney(overdueAmount) }}元</div>
-                    <div class="stat-label">欠缴金额</div>
-                  </div>
-                </div>
-              </el-card>
-            </el-col>
-            <el-col :span="6">
-              <el-card shadow="hover" class="stat-card">
-                <div class="stat-content">
-                  <div class="stat-icon growth">
-                    <i class="el-icon-trend-charts"></i>
-                  </div>
-                  <div class="stat-info">
-                    <div class="stat-number">{{ yearOverYearGrowth }}%</div>
-                    <div class="stat-label">同比增长</div>
-                  </div>
-                </div>
-              </el-card>
-            </el-col>
-          </el-row>
-        </div>
+      <div class="mgmt-home__scroll">
+  
 
-        <!-- 图表区域 -->
-        <div class="charts-container">
-          <el-row :gutter="20">
-            <el-col :span="16">
-              <el-card class="chart-card">
-                <template #header>
-                  <div class="card-header">
-                    <span>近12个月收入趋势</span>
-                    <div class="chart-controls">
-                      <el-cascader
-                        v-model="selectedCompany"
-                        :options="companyCascaderOptions"
-                        placeholder="选择公司"
-                        style="width: 250px; margin-right: 16px;"
-                        @change="updateIncomeChart"
-                        clearable
-                        :props="{
-                          value: 'value',
-                          label: 'label',
-                          children: 'children',
-                          checkStrictly: true,
-                          multiple: false
-                        }"
-                      />
-                      <div class="chart-legend">
-                        <span class="legend-item">
-                          <span class="legend-color current"></span>
-                          <span>今年</span>
-                        </span>
-                        <span class="legend-item">
-                          <span class="legend-color last-year"></span>
-                          <span>去年</span>
-                        </span>
-                      </div>
-                    </div>
+        <div class="mgmt-body">
+          <!-- 指标带 -->
+          <div class="metrics-strip">
+            <div class="metric-item metric-item--tenants">
+              <div class="metric-item__label">当前租户数</div>
+              <div class="metric-item__value">{{ currentTenants }}</div>
+            </div>
+
+            <div class="metric-item metric-item--income">
+              <div class="metric-item__head">
+                <div>
+                  <div class="metric-item__label">{{ incomePeriodLabel }}</div>
+                  <div class="metric-item__value">
+                    {{ formatMoney(periodIncome) }}<span class="metric-item__unit">元</span>
                   </div>
-                </template>
-                <div ref="incomeChart" style="height: 350px"></div>
-              </el-card>
-            </el-col>
-            <el-col :span="8">
-              <el-card class="chart-card">
-                <template #header>
-                  <div class="card-header">
-                    <span>收入构成分析</span>
-                  </div>
-                </template>
-                <div ref="pieChart" style="height: 350px"></div>
-              </el-card>
-            </el-col>
-          </el-row>
-        </div>
-        <!-- 逾期付款提醒 -->
-        <el-card class="overdue-reminder">
-          <template #header>
-            <div class="card-header">
-              <span>逾期付款提醒</span>
-              <div class="card-header-actions">
-                <el-button type="text" size="small" @click="exportOverduePaymentsToExcel">导出Excel</el-button>
-                <el-button type="text" size="small" @click="goToPaymentDetails">查看全部</el-button>
+                </div>
+                <div class="metric-item__icon"><i class="el-icon-money"></i></div>
+              </div>
+              <div class="metric-item__toolbar">
+                <el-radio-group
+                  v-model="incomePeriodType"
+                  size="small"
+                  class="period-switch"
+                  @change="onIncomePeriodChange"
+                >
+                  <el-radio-button label="day">日</el-radio-button>
+                  <el-radio-button label="month">月</el-radio-button>
+                  <el-radio-button label="year">年</el-radio-button>
+                </el-radio-group>
+                <el-date-picker
+                  v-model="incomeQueryDate"
+                  :type="incomeDatePickerType"
+                  :placeholder="incomeDatePickerPlaceholder"
+                  size="small"
+                  class="metric-date-picker"
+                  :clearable="false"
+                  @change="onIncomeQueryChange"
+                />
               </div>
             </div>
-          </template>
-          <el-table :data="overduePayments" style="width: 100%" :max-height="300">
-            <el-table-column prop="ownerName" label="商户名称" />
-            <el-table-column prop="paymentDeadline" label="付款截止日" width="110" />
-            <el-table-column prop="paymentStartDate" label="租赁付款期间" >
-              <template #default="scope">
-                {{ scope.row.paymentStartDate }} ~ {{ scope.row.paymentEndDate }}
-              </template>
-            </el-table-column>
-            <el-table-column prop="dueAmount" label="应收金额" >
-              <template #default="scope">
-                {{ formatMoney(scope.row.dueAmount) }}元
-              </template>
-            </el-table-column>
-            <el-table-column prop="actualAmount" label="实收金额" >
-              <template #default="scope">
-                {{ formatMoney(scope.row.actualAmount) }}元
-              </template>
-            </el-table-column>
-            <el-table-column prop="overdueDays" label="逾期天数">
-              <template #default="scope">
-                <el-tag :type="getOverdueType(scope.row.overdueDays)" size="small">
-                  {{ scope.row.overdueDays }}天
-                </el-tag>
-              </template>
-            </el-table-column>
-            <el-table-column prop="arrearsAmount" label="欠缴金额">
-              <template #default="scope">
-                <span class="overdue-amount">{{ formatMoney(scope.row.arrearsAmount) }}元</span>
-              </template>
-            </el-table-column>
-          </el-table>
-        </el-card>
-        <!-- 租期到期提醒 -->
-        <el-card class="lease-reminder">
-          <template #header>
-            <div class="card-header">
-              <span>租期到期提醒</span>
-              <el-button type="text" size="small" @click="goToOwnerDetails">查看全部</el-button>
-            </div>
-          </template>
-          <el-table :data="expiringLeases" style="width: 100%" :max-height="300">
-            <el-table-column prop="tenant" label="商户名称" />
-            <el-table-column prop="room" label="房间号" />
-            <el-table-column prop="expireDate" label="到期日期"  />
-            <el-table-column prop="remainDays" label="剩余天数" >
-              <template #default="scope">
-                <el-tag :type="getRemainDaysType(scope.row.remainDays)" size="small">
-                  {{ scope.row.remainDays }}天
-                </el-tag>
-              </template>
-            </el-table-column>
-            <el-table-column prop="monthlyRent" label="月租金" >
-              <template #default="scope">
-                {{ formatMoney(scope.row.monthlyRent) }}元
-              </template>
-            </el-table-column>
-            <el-table-column prop="status" label="状态">
-              <template #default="scope">
-                <el-tag :type="getStatusType(scope.row.status)" size="small">
-                  {{ scope.row.status }}
-                </el-tag>
-              </template>
-            </el-table-column>
-          </el-table>
-        </el-card>
 
-      
+            <div class="metric-item metric-item--overdue">
+              <div class="metric-item__label">欠缴金额</div>
+              <div class="metric-item__value metric-item__value--warn">
+                {{ formatMoney(overdueAmount) }}<span class="metric-item__unit">元</span>
+              </div>
+            </div>
+
+            <div class="metric-item metric-item--growth">
+              <div class="metric-item__label">{{ growthPeriodLabel }}</div>
+              <div class="metric-item__value">
+                {{ yearOverYearGrowth }}<span class="metric-item__unit">%</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 图表区 -->
+          <div class="workspace-row workspace-row--charts">
+            <div class="block block--chart">
+              <div class="block__header">
+                <div class="block__title-wrap">
+                  <span class="block__bar"></span>
+                  <div>
+                    <h2 class="block__title">近12个月收入趋势</h2>
+                    <p class="block__desc">按付款日期统计实收金额</p>
+                  </div>
+                </div>
+                <div class="block__tools">
+                  <el-cascader
+                    v-model="selectedCompany"
+                    :options="companyCascaderOptions"
+                    placeholder="选择公司"
+                    class="company-filter"
+                    @change="updateIncomeChart"
+                    clearable
+                    :props="{
+                      value: 'value',
+                      label: 'label',
+                      children: 'children',
+                      checkStrictly: true,
+                      multiple: false
+                    }"
+                  />
+                  <div class="chart-legend">
+                    <span class="legend-item"><i class="legend-line legend-line--now"></i>今年</span>
+                    <span class="legend-item"><i class="legend-line legend-line--prev"></i>去年</span>
+                  </div>
+                </div>
+              </div>
+              <div class="block__content">
+                <div ref="incomeChart" class="chart-box"></div>
+              </div>
+            </div>
+
+            <div class="block block--pie">
+              <div class="block__header">
+                <div class="block__title-wrap">
+                  <span class="block__bar block__bar--green"></span>
+                  <div>
+                    <h2 class="block__title">收入构成分析</h2>
+                    <p class="block__desc">{{ incomePeriodLabel }}</p>
+                  </div>
+                </div>
+              </div>
+              <div class="block__content">
+                <div ref="pieChart" class="chart-box chart-box--pie"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 提醒区：双表并排 -->
+          <div class="workspace-row workspace-row--tables">
+            <div class="block block--table">
+              <div class="block__header">
+                <div class="block__title-wrap">
+                  <span class="block__bar block__bar--amber"></span>
+                  <div>
+                    <h2 class="block__title">逾期付款提醒</h2>
+                    <p class="block__desc">已过付款截止日</p>
+                  </div>
+                </div>
+                <div class="block__tools">
+                  <el-button type="primary" link @click="exportOverduePaymentsToExcel">导出 Excel</el-button>
+                  <el-button type="primary" link @click="goToPaymentDetails">查看全部</el-button>
+                </div>
+              </div>
+              <div class="block__content block__content--table">
+                <el-table :data="overduePayments" class="mgmt-table" stripe :max-height="tableMaxHeight">
+                  <el-table-column prop="ownerName" label="商户名称" min-width="180" show-overflow-tooltip />
+                  <el-table-column prop="companyName" label="公司" min-width="180" show-overflow-tooltip />
+                  <el-table-column prop="paymentDeadline" label="付款截止日" width="110" />
+                  <el-table-column prop="paymentStartDate" label="租赁付款期间" min-width="120">
+                    <template #default="scope">
+                      {{ scope.row.paymentStartDate }} ~ {{ scope.row.paymentEndDate }}
+                    </template>
+                  </el-table-column>
+                  <el-table-column prop="dueAmount" label="应收金额" width="120" align="right">
+                    <template #default="scope">{{ formatMoney(scope.row.dueAmount) }}元</template>
+                  </el-table-column>
+                  <el-table-column prop="actualAmount" label="实收金额" width="120" align="right">
+                    <template #default="scope">{{ formatMoney(scope.row.actualAmount) }}元</template>
+                  </el-table-column>
+                  <el-table-column prop="overdueDays" label="逾期天数" width="100" align="center">
+                    <template #default="scope">
+                      <el-tag :type="getOverdueType(scope.row.overdueDays)" size="small" effect="plain">
+                        {{ scope.row.overdueDays }}天
+                      </el-tag>
+                    </template>
+                  </el-table-column>
+                  <el-table-column prop="arrearsAmount" label="欠缴金额" width="120" align="right">
+                    <template #default="scope">
+                      <span class="text-danger">{{ formatMoney(scope.row.arrearsAmount) }}元</span>
+                    </template>
+                  </el-table-column>
+                </el-table>
+              </div>
+            </div>
+
+            <div class="block block--table">
+              <div class="block__header">
+                <div class="block__title-wrap">
+                  <span class="block__bar block__bar--blue"></span>
+                  <div>
+                    <h2 class="block__title">租期到期提醒</h2>
+                    <p class="block__desc">90 天内即将到期的租约</p>
+                  </div>
+                </div>
+                <div class="block__tools">
+                  <el-button type="primary" link @click="goToOwnerDetails">查看全部</el-button>
+                </div>
+              </div>
+              <div class="block__content block__content--table">
+                <el-table :data="expiringLeases" class="mgmt-table" stripe :max-height="tableMaxHeight">
+                  <el-table-column prop="tenant" label="商户名称" min-width="110" show-overflow-tooltip />
+                  <el-table-column prop="room" label="房间号" min-width="100" />
+                  <el-table-column prop="expireDate" label="到期日期" width="108" />
+                  <el-table-column prop="remainDays" label="剩余天数" width="88" align="center">
+                    <template #default="scope">
+                      <el-tag :type="getRemainDaysType(scope.row.remainDays)" size="small" effect="plain">
+                        {{ scope.row.remainDays }}天
+                      </el-tag>
+                    </template>
+                  </el-table-column>
+                  <el-table-column prop="monthlyRent" label="月租金" width="100" align="right">
+                    <template #default="scope">{{ formatMoney(scope.row.monthlyRent) }}元</template>
+                  </el-table-column>
+                  <el-table-column prop="status" label="状态" width="92" align="center">
+                    <template #default="scope">
+                      <el-tag :type="getStatusType(scope.row.status)" size="small" effect="plain">
+                        {{ scope.row.status }}
+                      </el-tag>
+                    </template>
+                  </el-table-column>
+                </el-table>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </el-scrollbar>
   </div>
@@ -199,6 +211,12 @@
 import { defineComponent } from 'vue';
 import * as echarts from 'echarts';
 import * as XLSX from 'xlsx';
+import {
+  calcPaymentArrearsAmount,
+  getPaymentActualAmount,
+  getPaymentDueAmount,
+  hasPaymentActualInput
+} from '@/utils/paymentAmount';
 
 /** 付款主行（分期子行不参与首页逾期统计） */
 function isPaymentMainRowForDashboard(item) {
@@ -213,22 +231,12 @@ function isPaymentDeadlinePassedForDashboard(item, nowMs = Date.now()) {
   return !Number.isNaN(deadlineMs) && deadlineMs < nowMs;
 }
 
-/** 欠缴金额 = 应收金额 - 实收金额（仅主行且已过付款截止日；优先用库中 ArrearsAmount） */
+/** 欠缴金额 = (应收租金+管理费 - 优惠) - 实收租金+管理费（仅主行且已过付款截止日） */
 function getPaymentArrearsAmountForDashboard(item, nowMs = Date.now()) {
   if (!isPaymentMainRowForDashboard(item) || !isPaymentDeadlinePassedForDashboard(item, nowMs)) {
     return 0;
   }
-  const saved = item.ArrearsAmount;
-  if (saved !== '' && saved != null && saved !== undefined) {
-    const n = Number(saved);
-    if (!Number.isNaN(n)) return roundMoney2(Math.max(0, n));
-  }
-  const due = Number(item.DueAmount) || 0;
-  const actual =
-    item.ActualAmount == null || item.ActualAmount === ''
-      ? 0
-      : Number(item.ActualAmount) || 0;
-  return roundMoney2(Math.max(0, due - actual));
+  return roundMoney2(Math.max(0, calcPaymentArrearsAmount(item) || 0));
 }
 
 /** 与付款明细页「是否欠缴」一致：主行、已过截止日、欠缴金额 > 0 */
@@ -248,11 +256,88 @@ function formatMoney2(value) {
   return roundMoney2(value).toFixed(2);
 }
 
+/** 图表 Y 轴刻度/十字准线标签：取整显示 */
+function formatChartAxisInteger(value) {
+  const n = roundMoney2(value);
+  if (!Number.isFinite(n)) return '0';
+  return String(Math.round(n));
+}
+
+/** 从 ECharts tooltip 参数中取出系列数值 */
+function getChartTooltipValue(param) {
+  if (!param) return 0;
+  const v = param.value;
+  if (v == null || v === '' || v === '-') return 0;
+  if (Array.isArray(v)) return roundMoney2(Number(v[v.length - 1]));
+  if (typeof v === 'object' && v !== null && 'value' in v) {
+    return roundMoney2(Number(v.value));
+  }
+  return roundMoney2(Number(v));
+}
+
+function parsePaymentDate(value) {
+  if (!value) return null;
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+function isSameCalendarDay(a, b) {
+  return (
+    a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate()
+  );
+}
+
+function isSameCalendarMonth(a, b) {
+  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth();
+}
+
+function isSameCalendarYear(a, b) {
+  return a.getFullYear() === b.getFullYear();
+}
+
+/** 付款日期是否落在收入查询周期内（按付款日期的日/月/年） */
+function isPaymentInIncomePeriod(paymentDateStr, periodType, queryDate) {
+  const pd = parsePaymentDate(paymentDateStr);
+  const qd = queryDate instanceof Date ? queryDate : new Date(queryDate);
+  if (!pd || Number.isNaN(qd.getTime())) return false;
+  if (periodType === 'day') return isSameCalendarDay(pd, qd);
+  if (periodType === 'month') return isSameCalendarMonth(pd, qd);
+  if (periodType === 'year') return isSameCalendarYear(pd, qd);
+  return false;
+}
+
+/** 同比对比用的上一周期查询日期 */
+function shiftIncomeQueryDateForComparison(periodType, queryDate) {
+  const qd = new Date(queryDate);
+  if (periodType === 'day') {
+    return new Date(qd.getFullYear() - 1, qd.getMonth(), qd.getDate());
+  }
+  if (periodType === 'month') {
+    return new Date(qd.getFullYear() - 1, qd.getMonth(), 1);
+  }
+  return new Date(qd.getFullYear() - 1, 0, 1);
+}
+
+function formatIncomePeriodLabel(periodType, queryDate) {
+  const d = queryDate instanceof Date ? queryDate : new Date(queryDate);
+  const pad = (n) => String(n).padStart(2, '0');
+  if (periodType === 'day') {
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} 实收收入`;
+  }
+  if (periodType === 'month') {
+    return `${d.getFullYear()}年${d.getMonth() + 1}月 实收收入`;
+  }
+  return `${d.getFullYear()}年 实收收入`;
+}
+
 /** 导出为真实 .xlsx 文件 */
 function downloadAoaAsXlsx(fileName, sheetName, headers, rows) {
   const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
   ws['!cols'] = [
     { wch: 18 },
+    { wch: 14 },
     { wch: 12 },
     { wch: 14 },
     { wch: 14 },
@@ -275,7 +360,9 @@ export default defineComponent({
       paymentData: null, // 付款数据
       companyData: null, // 公司数据
       currentTenants: 0,
-      currentMonthIncome: 0,
+      periodIncome: 0,
+      incomePeriodType: 'month',
+      incomeQueryDate: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
       overdueAmount: 0,
       yearOverYearGrowth: 0,
       expiringLeases: [],
@@ -283,6 +370,29 @@ export default defineComponent({
       selectedCompany: 'all', // 选中的公司，默认为所有公司
       companyOptions: [], // 公司选项列表
       companyCascaderOptions: [] // 级联选择器选项
+    }
+  },
+  computed: {
+    incomeDatePickerType() {
+      if (this.incomePeriodType === 'day') return 'date';
+      if (this.incomePeriodType === 'year') return 'year';
+      return 'month';
+    },
+    incomeDatePickerPlaceholder() {
+      if (this.incomePeriodType === 'day') return '选择日期';
+      if (this.incomePeriodType === 'year') return '选择年份';
+      return '选择月份';
+    },
+    incomePeriodLabel() {
+      return formatIncomePeriodLabel(this.incomePeriodType, this.incomeQueryDate);
+    },
+    growthPeriodLabel() {
+      if (this.incomePeriodType === 'day') return '日同比';
+      if (this.incomePeriodType === 'year') return '年同比';
+      return '月同比';
+    },
+    tableMaxHeight() {
+      return 380;
     }
   },
   methods: {
@@ -356,41 +466,77 @@ export default defineComponent({
       this.currentTenants = filteredData.length;
     },
 
+    /** 按付款日期周期汇总实收（与付款明细口径一致） */
+    sumActualIncomeByPeriod(periodType, queryDate, targetCompanyIds) {
+      if (!this.paymentData) return 0;
+      return roundMoney2(
+        this.paymentData
+          .filter((item) => {
+            if (!item.PaymentDate || !hasPaymentActualInput(item)) return false;
+            if (
+              !isPaymentInIncomePeriod(
+                item.PaymentDate,
+                periodType,
+                queryDate
+              )
+            ) {
+              return false;
+            }
+            if (targetCompanyIds && !targetCompanyIds.includes(item.Company)) {
+              return false;
+            }
+            return true;
+          })
+          .reduce((sum, item) => sum + getPaymentActualAmount(item), 0)
+      );
+    },
+
+    getIncomeTargetCompanyIds() {
+      if (this.selectedCompany && this.selectedCompany !== 'all') {
+        return this.getCompanyAndChildrenIds(this.selectedCompany);
+      }
+      return null;
+    },
+
+    onIncomePeriodChange() {
+      const now = new Date();
+      if (this.incomePeriodType === 'day') {
+        this.incomeQueryDate = now;
+      } else if (this.incomePeriodType === 'month') {
+        this.incomeQueryDate = new Date(now.getFullYear(), now.getMonth(), 1);
+      } else {
+        this.incomeQueryDate = new Date(now.getFullYear(), 0, 1);
+      }
+      this.refreshIncomeStats();
+    },
+
+    onIncomeQueryChange() {
+      if (!this.incomeQueryDate) {
+        this.onIncomePeriodChange();
+        return;
+      }
+      this.refreshIncomeStats();
+    },
+
+    refreshIncomeStats() {
+      this.calculateIncomeData();
+      this.updatePieChart();
+    },
+
     // 计算收入数据
     calculateIncomeData() {
       if (!this.paymentData) return;
 
       const now = new Date();
-      const currentYear = now.getFullYear();
-      const currentMonth = now.getMonth();
+      const targetCompanyIds = this.getIncomeTargetCompanyIds();
 
-      // 获取需要统计的公司ID列表
-      let targetCompanyIds = null;
-      if (this.selectedCompany && this.selectedCompany !== 'all') {
-        targetCompanyIds = this.getCompanyAndChildrenIds(this.selectedCompany);
-      }
-
-      // 计算本月收入
-      this.currentMonthIncome = roundMoney2(
-        this.paymentData
-          .filter(item => {
-            if (!item.PaymentDate) return false;
-            const paymentDate = new Date(item.PaymentDate);
-            const isCurrentMonth = paymentDate.getFullYear() === currentYear && 
-                                  paymentDate.getMonth() === currentMonth &&
-                                  item.ActualAmount;
-            
-            // 如果选择了特定公司，则过滤数据
-            if (targetCompanyIds && !targetCompanyIds.includes(item.Company)) {
-              return false;
-            }
-            
-            return isCurrentMonth;
-          })
-          .reduce((sum, item) => sum + (Number(item.ActualAmount) || 0), 0)
+      this.periodIncome = this.sumActualIncomeByPeriod(
+        this.incomePeriodType,
+        this.incomeQueryDate,
+        targetCompanyIds
       );
 
-      // 计算逾期金额（与付款明细欠缴一致：主行、已过截止日、应收-实收）
+      // 计算逾期金额（与付款明细欠缴一致：主行、已过截止日、应收-优惠-实收）
       const nowMs = now.getTime();
       this.overdueAmount = roundMoney2(
         this.paymentData
@@ -404,66 +550,36 @@ export default defineComponent({
           .reduce((sum, item) => sum + getPaymentArrearsAmountForDashboard(item, nowMs), 0)
       );
 
-      // 计算同比增长
       this.calculateYearOverYearGrowth();
-      this.updatePieChart();
     },
 
-    // 计算同比增长
+    // 计算同比增长（与收入卡片所选日/月/年周期一致）
     calculateYearOverYearGrowth() {
       if (!this.paymentData) return;
 
-      const now = new Date();
-      const currentYear = now.getFullYear();
-      const currentMonth = now.getMonth();
-      const lastYear = currentYear - 1;
+      const targetCompanyIds = this.getIncomeTargetCompanyIds();
+      const currentIncome = this.sumActualIncomeByPeriod(
+        this.incomePeriodType,
+        this.incomeQueryDate,
+        targetCompanyIds
+      );
+      const compareDate = shiftIncomeQueryDateForComparison(
+        this.incomePeriodType,
+        this.incomeQueryDate
+      );
+      const lastPeriodIncome = this.sumActualIncomeByPeriod(
+        this.incomePeriodType,
+        compareDate,
+        targetCompanyIds
+      );
 
-      // 获取需要统计的公司ID列表
-      let targetCompanyIds = null;
-      if (this.selectedCompany && this.selectedCompany !== 'all') {
-        targetCompanyIds = this.getCompanyAndChildrenIds(this.selectedCompany);
-      }
-
-      // 今年本月收入
-      const currentYearIncome = this.paymentData
-        .filter(item => {
-          if (!item.PaymentDate) return false;
-          const paymentDate = new Date(item.PaymentDate);
-          const isCurrentYearMonth = paymentDate.getFullYear() === currentYear && 
-                                    paymentDate.getMonth() === currentMonth &&
-                                    item.ActualAmount;
-          
-          // 如果选择了特定公司，则过滤数据
-          if (targetCompanyIds && !targetCompanyIds.includes(item.Company)) {
-            return false;
-          }
-          
-          return isCurrentYearMonth;
-        })
-        .reduce((sum, item) => sum + (Number(item.ActualAmount) || 0), 0);
-
-      // 去年本月收入
-      const lastYearIncome = this.paymentData
-        .filter(item => {
-          if (!item.PaymentDate) return false;
-          const paymentDate = new Date(item.PaymentDate);
-          const isLastYearMonth = paymentDate.getFullYear() === lastYear && 
-                                 paymentDate.getMonth() === currentMonth &&
-                                 item.ActualAmount;
-          
-          // 如果选择了特定公司，则过滤数据
-          if (targetCompanyIds && !targetCompanyIds.includes(item.Company)) {
-            return false;
-          }
-          
-          return isLastYearMonth;
-        })
-        .reduce((sum, item) => sum + (Number(item.ActualAmount) || 0), 0);
-
-      if (lastYearIncome > 0) {
-        this.yearOverYearGrowth = ((currentYearIncome - lastYearIncome) / lastYearIncome * 100).toFixed(1);
+      if (lastPeriodIncome > 0) {
+        this.yearOverYearGrowth = (
+          ((currentIncome - lastPeriodIncome) / lastPeriodIncome) *
+          100
+        ).toFixed(1);
       } else {
-        this.yearOverYearGrowth = currentYearIncome > 0 ? 100 : 0;
+        this.yearOverYearGrowth = currentIncome > 0 ? 100 : 0;
       }
     },
 
@@ -520,16 +636,13 @@ export default defineComponent({
           const overdueDays = Math.ceil(
             (nowMs - deadline.getTime()) / (1000 * 60 * 60 * 24)
           );
-          const dueAmount = roundMoney2(Number(item.DueAmount) || 0);
-          const actualAmount = roundMoney2(
-            item.ActualAmount == null || item.ActualAmount === ''
-              ? 0
-              : Number(item.ActualAmount) || 0
-          );
+          const dueAmount = roundMoney2(getPaymentDueAmount(item));
+          const actualAmount = roundMoney2(getPaymentActualAmount(item));
           const arrearsAmount = getPaymentArrearsAmountForDashboard(item, nowMs);
 
           return {
             ownerName: item.OwnerName || '未知商户',
+            companyName: this.getCompanyName(item.Company),
             paymentDeadline: item.PaymentDeadline
               ? item.PaymentDeadline.split(' ')[0]
               : '',
@@ -563,6 +676,7 @@ export default defineComponent({
       }
       const headers = [
         '商户名称',
+        '公司',
         '付款截止日',
         '租赁付款期间起',
         '租赁付款期间止',
@@ -573,6 +687,7 @@ export default defineComponent({
       ];
       const dataRows = rows.map((r) => [
         r.ownerName,
+        r.companyName,
         r.paymentDeadline,
         r.paymentStartDate,
         r.paymentEndDate,
@@ -648,16 +763,19 @@ export default defineComponent({
         tooltip: {
           trigger: 'axis',
           axisPointer: {
-            type: 'cross',
-            label: {
-              backgroundColor: '#6a7985'
+            type: 'line',
+            snap: true,
+            lineStyle: {
+              color: '#1677ff',
+              type: 'dashed'
             }
           },
           formatter: (params) => {
             if (!params || !params.length) return '';
-            let html = params[0].axisValue + '<br/>';
+            let html = `${params[0].axisValue}<br/>`;
             params.forEach((p) => {
-              html += `${p.marker}${p.seriesName}: ${formatMoney2(p.value)}元<br/>`;
+              const val = getChartTooltipValue(p);
+              html += `${p.marker}${p.seriesName}: ${formatMoney2(val)}元<br/>`;
             });
             return html.replace(/<br\/>$/, '');
           }
@@ -669,6 +787,7 @@ export default defineComponent({
           left: '3%',
           right: '4%',
           bottom: '3%',
+          top: '14%',
           containLabel: true
         },
         xAxis: {
@@ -680,16 +799,30 @@ export default defineComponent({
           type: 'value',
           name: '金额(元)',
           axisLabel: {
-            formatter: (val) => formatMoney2(val)
+            formatter: (val) => formatChartAxisInteger(val)
+          },
+          axisPointer: {
+            show: false
           }
         },
-        color: ['#6366f1', '#94a3b8'],
+        color: ['#1677ff', '#bfbfbf'],
         series: [
           {
             name: '今年收入',
             type: 'line',
             smooth: true,
+            showSymbol: true,
+            symbol: 'circle',
+            symbolSize: 7,
             data: monthlyData.currentYear,
+            emphasis: {
+              focus: 'series',
+              scale: true,
+              itemStyle: {
+                borderColor: '#fff',
+                borderWidth: 2
+              }
+            },
             lineStyle: {
               width: 3,
               shadowColor: 'rgba(99,102,241,0.2)',
@@ -697,13 +830,35 @@ export default defineComponent({
             },
             areaStyle: {
               opacity: 0.1
+            },
+            label: {
+              show: true,
+              position: 'top',
+              distance: 8,
+              fontSize: 11,
+              color: '#1677ff',
+              formatter: (params) => formatChartAxisInteger(params.value)
+            },
+            labelLayout: {
+              hideOverlap: true
             }
           },
           {
             name: '去年收入',
             type: 'line',
             smooth: true,
+            showSymbol: true,
+            symbol: 'circle',
+            symbolSize: 7,
             data: monthlyData.lastYear,
+            emphasis: {
+              focus: 'series',
+              scale: true,
+              itemStyle: {
+                borderColor: '#fff',
+                borderWidth: 2
+              }
+            },
             lineStyle: {
               width: 3,
               shadowColor: 'rgba(148,163,184,0.2)',
@@ -711,6 +866,17 @@ export default defineComponent({
             },
             areaStyle: {
               opacity: 0.1
+            },
+            label: {
+              show: true,
+              position: 'bottom',
+              distance: 8,
+              fontSize: 11,
+              color: '#8c8c8c',
+              formatter: (params) => formatChartAxisInteger(params.value)
+            },
+            labelLayout: {
+              hideOverlap: true
             }
           }
         ]
@@ -740,17 +906,19 @@ export default defineComponent({
       pie.setOption({
         tooltip: {
           trigger: 'item',
-          formatter: (p) =>
-            `${p.seriesName}<br/>${p.marker}${p.name}: ${formatMoney2(p.value)}元 (${p.percent}%)`,
-          confine: false,
-          appendToBody: true
+          formatter: (p) => {
+            const val = getChartTooltipValue(p);
+            const pct = Number.isFinite(p.percent) ? p.percent.toFixed(1) : '0.0';
+            return `${p.seriesName}<br/>${p.marker}${p.name}: ${formatMoney2(val)}元 (${pct}%)`;
+          },
+          confine: true
         },
         legend: {
           orient: 'vertical',
           left: 'left',
           top: 'top'
         },
-        color: ['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4'],
+        color: ['#1677ff', '#52c41a', '#faad14', '#ff4d4f', '#722ed1', '#13c2c2'],
         series: [
           {
             name: '收入构成',
@@ -770,11 +938,16 @@ export default defineComponent({
               position: 'center'
             },
             emphasis: {
+              scale: true,
+              scaleSize: 8,
               label: {
                 show: true,
-                fontSize: '18',
+                fontSize: '16',
                 fontWeight: 'bold',
-                formatter: (p) => `${p.name}\n${formatMoney2(p.value)}元`
+                formatter: (p) => {
+                  const val = getChartTooltipValue(p);
+                  return `${p.name}\n${formatMoney2(val)}元`;
+                }
               }
             },
             labelLine: {
@@ -803,7 +976,7 @@ export default defineComponent({
       }
 
       this.paymentData.forEach(item => {
-        if (!item.PaymentDate || !item.ActualAmount) return;
+        if (!item.PaymentDate || !hasPaymentActualInput(item)) return;
         
         // 如果选择了特定公司，则只统计该公司的数据
         if (targetCompanyIds && !targetCompanyIds.includes(item.Company)) {
@@ -813,7 +986,7 @@ export default defineComponent({
         const paymentDate = new Date(item.PaymentDate);
         const year = paymentDate.getFullYear();
         const month = paymentDate.getMonth();
-        const amount = Number(item.ActualAmount) || 0;
+        const amount = getPaymentActualAmount(item);
 
         if (year === currentYear) {
           currentYearData[month] += amount;
@@ -846,16 +1019,9 @@ export default defineComponent({
       return topId ? [topId] : allRoots;
     },
 
-    // 计算饼图数据（固定展示顶级公司，无本月收入显示 0；仅统计付款主行）
+    // 计算饼图数据（固定展示顶级公司；按收入卡片所选周期统计实收）
     calculatePieChartData() {
-      const now = new Date();
-      const currentYear = now.getFullYear();
-      const currentMonth = now.getMonth();
-
-      let targetCompanyIds = null;
-      if (this.selectedCompany && this.selectedCompany !== 'all') {
-        targetCompanyIds = this.getCompanyAndChildrenIds(this.selectedCompany);
-      }
+      const targetCompanyIds = this.getIncomeTargetCompanyIds();
 
       const rootIds = this.getPieRootCompanyIds();
       const topCompanyIncome = {};
@@ -864,14 +1030,14 @@ export default defineComponent({
       });
 
       this.paymentData.forEach((item) => {
-        if (!isPaymentMainRowForDashboard(item)) return;
-        if (!item.PaymentDate || !item.ActualAmount) return;
+        if (!item.PaymentDate || !hasPaymentActualInput(item)) return;
         if (targetCompanyIds && !targetCompanyIds.includes(item.Company)) return;
-
-        const paymentDate = new Date(item.PaymentDate);
         if (
-          paymentDate.getFullYear() !== currentYear ||
-          paymentDate.getMonth() !== currentMonth
+          !isPaymentInIncomePeriod(
+            item.PaymentDate,
+            this.incomePeriodType,
+            this.incomeQueryDate
+          )
         ) {
           return;
         }
@@ -880,7 +1046,7 @@ export default defineComponent({
         if (topCompanyIncome[topCompanyId] === undefined) {
           topCompanyIncome[topCompanyId] = 0;
         }
-        topCompanyIncome[topCompanyId] += Number(item.ActualAmount) || 0;
+        topCompanyIncome[topCompanyId] += getPaymentActualAmount(item);
       });
 
       const orderedIds =
@@ -1095,319 +1261,363 @@ export default defineComponent({
 </script>
 
 <style lang="less" scoped>
-.home-content {
+@primary: #1677ff;
+@primary-dark: #0958d9;
+@bg: #f0f2f5;
+@card: #ffffff;
+@border: #e8e8e8;
+@text: #262626;
+@text-sub: #8c8c8c;
+@topbar-bg: linear-gradient(90deg, #001529 0%, #003a8c 55%, #0050b3 100%);
+
+.mgmt-home {
   position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: linear-gradient(135deg, #ffffff 0%, #cdcdcd 100%);
+  inset: 0;
+  background: @bg;
   overflow: hidden;
 
   :deep(.el-scrollbar) {
     height: 100%;
-    
+
     .el-scrollbar__wrap {
       overflow-x: hidden;
     }
   }
 
-  .content-wrapper {
-    padding: 24px;
-    box-sizing: border-box;
-    min-width: 1200px;
-    max-width: 100%;
-  }
-
-  // 数据概览卡片
-  .data-overview {
-    margin-bottom: 24px;
-    
-    .stat-card {
-      background: rgba(255, 255, 255, 0.95);
-      backdrop-filter: blur(10px);
-      border: none;
-      border-radius: 16px;
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-      transition: all 0.3s ease;
-      
-      &:hover {
-        transform: translateY(-4px);
-        box-shadow: 0 12px 40px rgba(0, 0, 0, 0.15);
-      }
-
-      .stat-content {
-        display: flex;
-        align-items: center;
-        padding: 20px;
-
-        .stat-icon {
-          width: 60px;
-          height: 60px;
-          border-radius: 12px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          margin-right: 16px;
-          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-          
-          i {
-            font-size: 24px;
-            color: white;
-          }
-
-          &.income {
-            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-          }
-
-          &.overdue {
-            background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
-          }
-
-          &.growth {
-            background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
-          }
-        }
-
-        .stat-info {
-          flex: 1;
-
-          .stat-number {
-            font-size: 28px;
-            font-weight: 700;
-            color: #1e293b;
-            margin-bottom: 4px;
-          }
-
-          .stat-label {
-            font-size: 14px;
-            color: #64748b;
-            font-weight: 500;
-          }
-        }
-      }
-    }
-  }
-
-  // 图表容器
-  .charts-container {
-    margin-bottom: 24px;
-    
-    .chart-card {
-      background: rgba(255, 255, 255, 0.95);
-      backdrop-filter: blur(10px);
-      border: none;
-      border-radius: 16px;
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-      
-      .card-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        color: #1e293b;
-        font-weight: 600;
-        font-size: 16px;
-
-        .chart-controls {
-          display: flex;
-          align-items: center;
-          gap: 16px;
-
-          .chart-legend {
-            display: flex;
-            gap: 16px;
-
-            .legend-item {
-              display: flex;
-              align-items: center;
-              font-size: 12px;
-              color: #64748b;
-
-              .legend-color {
-                width: 12px;
-                height: 12px;
-                border-radius: 2px;
-                margin-right: 6px;
-
-                &.current {
-                  background: #6366f1;
-                }
-
-                &.last-year {
-                  background: #94a3b8;
-                }
-              }
-            }
-          }
-        }
-      }
-    }
-  }
-
-  // 租期到期提醒
-  .lease-reminder {
-    background: rgba(255, 255, 255, 0.95);
-    backdrop-filter: blur(10px);
-    border: none;
-    border-radius: 16px;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-   
-    
-    .card-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      color: #1e293b;
-      font-weight: 600;
-      font-size: 16px;
-    }
-  }
-
-  // 逾期付款提醒
-  .overdue-reminder {
-    background: rgba(255, 255, 255, 0.95);
-    backdrop-filter: blur(10px);
-    border: none;
-    border-radius: 16px;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-    margin-bottom: 24px;
-    .card-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      color: #1e293b;
-      font-weight: 600;
-      font-size: 16px;
-    }
-
-    .card-header-actions {
-      display: flex;
-      align-items: center;
-      gap: 4px;
-    }
-
-    .overdue-amount {
-      color: #ef4444;
-      font-weight: 600;
-    }
+  &__scroll {
+    width: 100%;
+    min-height: 100%;
   }
 }
 
-// 表格样式优化
-:deep(.el-table) {
-  background: transparent;
-  border-radius: 8px;
-  
-  th {
-    background-color: rgba(248, 250, 252, 0.8) !important;
-    color: #64748b;
+// ── 顶栏 ──
+.mgmt-topbar {
+  width: 100%;
+  padding: 18px 24px;
+  background: @topbar-bg;
+  box-sizing: border-box;
+
+  &__brand {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+
+  &__icon {
+    width: 44px;
+    height: 44px;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.12);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 22px;
+    color: #fff;
+  }
+
+  &__title {
+    margin: 0 0 2px;
+    font-size: 20px;
     font-weight: 600;
-    border-bottom: 1px solid rgba(226, 232, 240, 0.8);
+    color: #fff;
+    letter-spacing: 0.02em;
   }
 
-  td {
-    color: #475569;
-    border-bottom: 1px solid rgba(226, 232, 240, 0.5);
-  }
-
-  tr:hover > td {
-    background-color: rgba(248, 250, 252, 0.5) !important;
+  &__desc {
+    margin: 0;
+    font-size: 13px;
+    color: rgba(255, 255, 255, 0.65);
   }
 }
 
-// 标签样式优化
-:deep(.el-tag) {
-  border-radius: 6px;
-  font-weight: 500;
-  
-  &.el-tag--danger {
-    background-color: rgba(239, 68, 68, 0.1);
-    border-color: rgba(239, 68, 68, 0.2);
-    color: #dc2626;
-  }
-  
-  &.el-tag--warning {
-    background-color: rgba(245, 158, 11, 0.1);
-    border-color: rgba(245, 158, 11, 0.2);
-    color: #d97706;
-  }
-  
-  &.el-tag--success {
-    background-color: rgba(34, 197, 94, 0.1);
-    border-color: rgba(34, 197, 94, 0.2);
-    color: #16a34a;
-  }
+// ── 主体：全宽 ──
+.mgmt-body {
+  width: 100%;
+  padding: 5px 10px;
+  box-sizing: border-box;
 }
 
-// 按钮样式优化
-:deep(.el-button--text) {
-  color: #6366f1;
-  font-weight: 500;
-  
-  &:hover {
-    color: #4f46e5;
-  }
+// ── 指标带 ──
+.metrics-strip {
+  display: grid;
+  grid-template-columns: 1fr 1.5fr 1fr 1fr;
+  gap: 12px;
+  width: 100%;
+  margin-bottom: 12px;
 }
 
-// 卡片样式优化
-:deep(.el-card) {
-  .el-card__header {
-    border-bottom: 1px solid rgba(226, 232, 240, 0.8);
-    padding: 20px;
+.metric-item {
+  background: @card;
+  border: 1px solid @border;
+  border-radius: 4px;
+  padding: 16px 20px;
+  box-sizing: border-box;
+  min-width: 0;
+
+  &__head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 10px;
   }
 
-  .el-card__body {
-    padding: 20px;
+  &__icon {
+    flex-shrink: 0;
+    width: 36px;
+    height: 36px;
+    border-radius: 4px;
+    background: #e6f4ff;
+    color: @primary;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
   }
-}
 
-// 响应式设计
-@media (max-width: 1200px) {
-  .content-wrapper {
-    padding: 16px;
+  &__label {
+    font-size: 13px;
+    color: @text-sub;
+    margin-bottom: 6px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
-  
-  .data-overview {
-    .stat-card {
-      .stat-content {
-        padding: 16px;
-        
-        .stat-icon {
-          width: 50px;
-          height: 50px;
-          margin-right: 12px;
-          
-          i {
-            font-size: 20px;
-          }
-        }
-        
-        .stat-info {
-          .stat-number {
-            font-size: 24px;
-          }
-        }
+
+  &__value {
+    font-size: 28px;
+    font-weight: 600;
+    color: @text;
+    line-height: 1.15;
+    font-variant-numeric: tabular-nums;
+
+    &--warn {
+      color: #cf1322;
+    }
+  }
+
+  &__unit {
+    font-size: 14px;
+    font-weight: 400;
+    color: @text-sub;
+    margin-left: 2px;
+  }
+
+  &__toolbar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding-top: 10px;
+    border-top: 1px solid #f0f0f0;
+
+    .period-switch {
+      flex-shrink: 0;
+
+      :deep(.el-radio-button__inner) {
+        padding: 5px 12px;
+        font-size: 12px;
+      }
+
+      :deep(.el-radio-button__original-radio:checked + .el-radio-button__inner) {
+        background: @primary;
+        border-color: @primary;
+        box-shadow: -1px 0 0 0 @primary;
       }
     }
+
+    .metric-date-picker {
+      flex: 1;
+      min-width: 0;
+    }
+  }
+
+  &--income {
+    border-left: 3px solid @primary;
+  }
+
+  &--overdue {
+    border-left: 3px solid #faad14;
+  }
+
+  &--growth {
+    border-left: 3px solid #52c41a;
+  }
+
+  &--tenants {
+    border-left: 3px solid #722ed1;
+  }
+}
+
+// ── 工作区行 ──
+.workspace-row {
+  display: grid;
+  gap: 12px;
+  width: 100%;
+  margin-bottom: 12px;
+
+  &--charts {
+    grid-template-columns: 1fr 600px;
+  }
+
+  &--tables {
+    grid-template-columns: 1fr;
+  }
+}
+
+// ── 内容块 ──
+.block {
+  background: @card;
+  border: 1px solid @border;
+  border-radius: 4px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+
+  &__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 14px 16px;
+    border-bottom: 1px solid #f0f0f0;
+    flex-shrink: 0;
+  }
+
+  &__title-wrap {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+  }
+
+  &__bar {
+    flex-shrink: 0;
+    width: 4px;
+    height: 36px;
+    border-radius: 2px;
+    background: @primary;
+
+    &--green { background: #52c41a; }
+    &--amber { background: #faad14; }
+    &--blue { background: #1677ff; }
+  }
+
+  &__title {
+    margin: 0 0 2px;
+    font-size: 15px;
+    font-weight: 600;
+    color: @text;
+  }
+
+  &__desc {
+    margin: 0;
+    font-size: 12px;
+    color: @text-sub;
+  }
+
+  &__tools {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-shrink: 0;
+  }
+
+  &__content {
+    padding: 12px 16px 16px;
+    flex: 1;
+    min-height: 0;
+
+    &--table {
+      padding: 0;
+    }
+  }
+}
+
+.company-filter {
+  width: 200px;
+}
+
+.chart-legend {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  font-size: 12px;
+  color: @text-sub;
+}
+
+.legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.legend-line {
+  display: inline-block;
+  width: 16px;
+  height: 3px;
+  border-radius: 2px;
+
+  &--now { background: @primary; }
+  &--prev { background: #bfbfbf; }
+}
+
+.chart-box {
+  width: 100%;
+  height: 380px;
+
+  &--pie {
+    height: 380px;
+  }
+}
+
+.text-danger {
+  color: #cf1322;
+  font-weight: 600;
+}
+
+:deep(.mgmt-table) {
+  width: 100%;
+
+  .el-table__header th {
+    background: #fafafa !important;
+    color: @text-sub;
+    font-size: 13px;
+    font-weight: 600;
+  }
+
+  .el-table__body td {
+    font-size: 13px;
+    color: @text;
+  }
+}
+
+@media (max-width: 1400px) {
+  .metrics-strip {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .workspace-row--charts {
+    grid-template-columns: 1fr;
   }
 }
 
 @media (max-width: 768px) {
-  .content-wrapper {
+  .mgmt-body {
     padding: 12px;
-    min-width: auto;
   }
-  
-  .data-overview {
-    .el-col {
-      margin-bottom: 16px;
-    }
+
+  .metrics-strip {
+    grid-template-columns: 1fr;
   }
-  
-  .charts-container {
-    .el-col {
-      margin-bottom: 16px;
-    }
+
+  .metric-item__toolbar {
+    flex-wrap: wrap;
+  }
+
+  .block__header {
+    flex-direction: column;
+    align-items: flex-start;
   }
 }
 </style>
