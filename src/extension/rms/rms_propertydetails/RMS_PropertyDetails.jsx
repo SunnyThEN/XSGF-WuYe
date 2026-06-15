@@ -133,15 +133,15 @@ function isPaymentDeadlinePassed(row, nowMs = Date.now()) {
   return !Number.isNaN(deadlineMs) && deadlineMs < nowMs
 }
 
-/** 带子节点的付款主项：以下列 = 一级子项对应列之和（应收租金/管理费由主项自行维护，不参与汇总） */
+/** 带子节点的付款主项：以下列 = 一级子项对应列之和 */
 const PAYMENT_CHILD_SUM_FIELDS = [
   'DiscountAmount',
   'ActualLeaseAmount',
   'ActualManageAmount'
 ]
 
-/** 应收明细列：编辑后重算本行 DueAmount，但不从子项汇总到主项 */
-const PAYMENT_DUE_FIELDS = ['DueLeaseAmount', 'DueManageAmout']
+/** 应收明细列：子项有输入时优先汇总到主项；子项均无应收时主项可手工维护 */
+const PAYMENT_CHILD_DUE_SUM_FIELDS = ['DueLeaseAmount', 'DueManageAmout']
 
 /** 汇总行刷新时需要更新的列 */
 const PAYMENT_SUMMARY_FIELDS = [
@@ -156,7 +156,7 @@ const PAYMENT_SUMMARY_FIELDS = [
 /** 编辑后触发整表重算的列 */
 const PAYMENT_RECALC_TRIGGER_FIELDS = [
   ...PAYMENT_CHILD_SUM_FIELDS,
-  ...PAYMENT_DUE_FIELDS,
+  ...PAYMENT_CHILD_DUE_SUM_FIELDS,
   'PaymentDeadline'
 ]
 
@@ -236,6 +236,12 @@ function sumChildrenFieldIntoParent(parentRow, field) {
   parentRow[field] = Number(sum.toFixed(2))
 }
 
+/** 任一子项已填写应收租金或应收管理费 */
+function childrenHaveDueInput(parentRow) {
+  if (!parentRow?.children?.length) return false
+  return parentRow.children.some((c) => hasSplitDueInput(c))
+}
+
 function recalcAllPaymentParentsWithChildren(nodes) {
   if (!nodes || !nodes.length) return
   nodes.forEach((node) => {
@@ -244,6 +250,11 @@ function recalcAllPaymentParentsWithChildren(nodes) {
       PAYMENT_CHILD_SUM_FIELDS.forEach((field) => {
         sumChildrenFieldIntoParent(node, field)
       })
+      if (childrenHaveDueInput(node)) {
+        PAYMENT_CHILD_DUE_SUM_FIELDS.forEach((field) => {
+          sumChildrenFieldIntoParent(node, field)
+        })
+      }
       recalcPaymentRowDerivedAmounts(node)
     } else {
       recalcPaymentRowDerivedAmounts(node)
@@ -426,7 +437,7 @@ let extension = {
       // this.$refs.table.$refs.table.toggleRowSelection(row); //单击行时选中当前行;
     },
 
-    /** 三级付款加载/刷新后，按子项重算主项实收、优惠金额 */
+    /** 三级付款加载/刷新后，按子项重算主项应收/实收/优惠金额 */
     searchSubDetailAfter(rows, table, item) {
       if (item && item.table === 'RMS_PaymentDetails') {
         restorePendingPaymentDelKeys(this, item)
@@ -435,7 +446,7 @@ let extension = {
       return true
     },
 
-    /** 重算付款明细：子项汇总实收/优惠；主项应收自行维护；仅根行计算欠缴（应收-优惠-实收） */
+    /** 重算付款明细：子项汇总应收/实收/优惠（应收优先自动汇总）；仅根行计算欠缴（应收-优惠-实收） */
     recalcPaymentParentActualAmounts() {
       const sub = this.getTable('RMS_PaymentDetails')
       if (!sub || !Array.isArray(sub.rowData)) return
@@ -450,7 +461,7 @@ let extension = {
       })
     },
 
-    /** 子项实收租金、实收管理费、优惠金额编辑时实时汇总到主项；应收由主项自行维护（onKeyPress + endEditAfter） */
+    /** 子项应收/实收/优惠编辑时实时汇总到主项；子项无应收时主项可手工维护（onKeyPress + endEditAfter） */
     bindPaymentActualAmountRollup() {
       const detail = this.details[0] && this.details[0].detail
       if (!detail || detail.table !== 'RMS_PaymentDetails' || detail._paymentActualRollupBound) return

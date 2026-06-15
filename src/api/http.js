@@ -12,8 +12,8 @@ let loadingInstance
 let loadingStatus = false
 let dataViewUrl
 if (process.env.NODE_ENV == 'development') {
-  axios.defaults.baseURL = 'http://localhost:9100/'
-  //axios.defaults.baseURL = 'http://192.168.0.249:9100/'
+  //axios.defaults.baseURL = 'http://localhost:9100/'
+  axios.defaults.baseURL = 'http://192.168.0.249:9100/'
   //大屏本地地址
   dataViewUrl = 'http://localhost:9200/'
 } else if (process.env.NODE_ENV == 'debug') {
